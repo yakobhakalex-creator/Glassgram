@@ -1,0 +1,111 @@
+<Window x:Class="Glassgram.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Glassgram">
+  <Grid x:Name="Root" RequestedTheme="Dark">
+    <Grid.Background><LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+      <GradientStop Color="#D9182738" Offset="0" /><GradientStop Color="#E6111725" Offset="1" />
+    </LinearGradientBrush></Grid.Background>
+    <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <Grid x:Name="TitleBar" Margin="24,0,150,0">
+      <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+        <FontIcon Glyph="&#xE8F2;" FontSize="17" Foreground="#9FD8F5"/>
+        <TextBlock Text="Glassgram" FontSize="16" FontWeight="SemiBold"/>
+      </StackPanel>
+    </Grid>
+    <NavigationView x:Name="Navigation" Grid.Row="1" PaneDisplayMode="LeftCompact" IsBackButtonVisible="Collapsed" IsPaneToggleButtonVisible="False" SelectionChanged="Navigate">
+      <NavigationView.MenuItems>
+        <NavigationViewItem Content="Сообщения" Tag="chats" Icon="Message" IsSelected="True"/>
+        <NavigationViewItem Content="Локальный ИИ" Tag="ai" Icon="Help"/>
+      </NavigationView.MenuItems>
+      <Grid Margin="0,0,20,20">
+        <Grid x:Name="AuthPage" Visibility="Collapsed">
+          <Border MaxWidth="620" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#347C9DAF" BorderBrush="#48FFFFFF" BorderThickness="1" CornerRadius="24" Padding="36">
+            <ScrollViewer MaxHeight="650"><StackPanel Spacing="16">
+              <TextBlock Text="Telegram в Glassgram" FontSize="30" FontWeight="SemiBold" />
+              <TextBlock x:Name="AuthDescription" Text="Подключаем Telegram…" Foreground="#B6C8D9" TextWrapping="Wrap"/>
+              <StackPanel x:Name="CredentialsPanel" Spacing="10" Visibility="Collapsed">
+                <TextBox x:Name="ApiIdInput" Header="API ID" PlaceholderText="Число из my.telegram.org" InputScope="Number"/>
+                <PasswordBox x:Name="ApiHashInput" Header="API hash" PlaceholderText="Ключ из my.telegram.org"/>
+                <TextBlock Text="Получить API ID и API hash можно на my.telegram.org. Они нужны TDLib для входа." Foreground="#B6C8D9" TextWrapping="Wrap"/>
+                <Button x:Name="SaveCredentialsButton" Content="Подключить Telegram" Click="SaveTelegramCredentials"/>
+              </StackPanel>
+              <StackPanel x:Name="PhonePanel" Spacing="12" Visibility="Collapsed">
+                <TextBox x:Name="PhoneInput" Header="Номер телефона" PlaceholderText="+380…" InputScope="TelephoneNumber"/>
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <Button x:Name="PhoneButton" Content="Получить код" Click="SubmitPhone"/>
+                  <Button x:Name="QrButton" Content="Войти по QR-коду" Click="StartQr"/>
+                </StackPanel>
+              </StackPanel>
+              <StackPanel x:Name="QrPanel" Spacing="12" Visibility="Collapsed">
+                <Border Background="White" Padding="12" CornerRadius="12" HorizontalAlignment="Left"><Image x:Name="QrImage" Width="220" Height="220"/></Border>
+                <TextBlock Text="Открой Telegram на телефоне → Настройки → Устройства → Подключить устройство и отсканируй код." TextWrapping="Wrap" Foreground="#B6C8D9"/>
+                <Button Content="Войти по номеру" Click="ShowPhone" HorizontalAlignment="Left"/>
+              </StackPanel>
+              <StackPanel x:Name="CodePanel" Spacing="12" Visibility="Collapsed">
+                <TextBox x:Name="CodeInput" Header="Код подтверждения" PlaceholderText="Код из Telegram или SMS"/>
+                <Button x:Name="CodeButton" Content="Продолжить" Click="SubmitCode" HorizontalAlignment="Left"/>
+              </StackPanel>
+              <StackPanel x:Name="EmailPanel" Spacing="12" Visibility="Collapsed">
+                <TextBox x:Name="EmailInput" Header="Адрес электронной почты" PlaceholderText="Адрес для кода Telegram"/>
+                <Button x:Name="EmailButton" Content="Отправить код" Click="SubmitEmail" HorizontalAlignment="Left"/>
+              </StackPanel>
+              <StackPanel x:Name="EmailCodePanel" Spacing="12" Visibility="Collapsed">
+                <TextBox x:Name="EmailCodeInput" Header="Код из письма"/>
+                <Button x:Name="EmailCodeButton" Content="Подтвердить" Click="SubmitEmailCode" HorizontalAlignment="Left"/>
+              </StackPanel>
+              <StackPanel x:Name="PasswordPanel" Spacing="12" Visibility="Collapsed">
+                <PasswordBox x:Name="PasswordInput" Header="Облачный пароль Telegram"/>
+                <Button x:Name="PasswordButton" Content="Войти" Click="SubmitPassword" HorizontalAlignment="Left"/>
+              </StackPanel>
+              <TextBlock x:Name="AuthError" Foreground="#FFB8AC" TextWrapping="Wrap"/>
+            </StackPanel></ScrollViewer>
+          </Border>
+        </Grid>
+        <Grid x:Name="ChatsPage" ColumnSpacing="16">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="290"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Border Background="#277C9DAF" CornerRadius="20" BorderBrush="#32FFFFFF" BorderThickness="1" Padding="20">
+            <StackPanel Spacing="18">
+              <TextBlock Text="Сообщения" FontSize="26" FontWeight="SemiBold"/>
+              <TextBlock x:Name="TelegramAccountStatus" Text="Telegram подключён" Foreground="#BCCAD8" TextWrapping="Wrap"/>
+              <Border Background="#20000000" CornerRadius="12" Padding="16"><StackPanel Spacing="8">
+                <TextBlock Text="Вход выполнен" TextWrapping="Wrap"/>
+                <TextBlock Text="Список чатов появится в следующей версии." Foreground="#A6BACD" TextWrapping="Wrap"/>
+              </StackPanel></Border>
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="1" Background="#157C9DAF" CornerRadius="20" BorderBrush="#26FFFFFF" BorderThickness="1" Padding="48">
+            <StackPanel VerticalAlignment="Center" MaxWidth="440" Spacing="20">
+              <FontIcon Glyph="&#xE8F2;" FontSize="58" Foreground="#9FD8F5" HorizontalAlignment="Left"/>
+              <TextBlock Text="Твоё пространство&#x0a;для общения" FontSize="38" FontWeight="SemiBold" TextWrapping="Wrap"/>
+              <TextBlock Text="Первая сборка Glassgram. Уже можно проверить локальную модель и обсудить с ней идеи." Foreground="#B6C8D9" FontSize="16" TextWrapping="Wrap"/>
+              <Button Content="Открыть локальный ИИ" Click="OpenAi" Padding="20,12" Background="#386983"/>
+            </StackPanel>
+          </Border>
+        </Grid>
+        <Grid x:Name="AiPage" Visibility="Collapsed" RowSpacing="16">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <StackPanel Spacing="8"><TextBlock Text="Локальный ИИ" FontSize="28" FontWeight="SemiBold"/>
+            <StackPanel Orientation="Horizontal" Spacing="12"><ComboBox x:Name="Models" PlaceholderText="Выбери модель" MinWidth="250" SelectionChanged="ModelChanged"/><Button x:Name="RefreshButton" Content="Проверить Ollama" Click="RefreshModels"/></StackPanel>
+          </StackPanel>
+          <Border Grid.Row="1" Background="#207C9DAF" CornerRadius="18" Padding="20">
+            <ScrollViewer x:Name="ConversationScroll"><StackPanel x:Name="Conversation" Spacing="16"/></ScrollViewer>
+          </Border>
+          <TextBlock x:Name="AiStatus" Grid.Row="2" Text="Подключение к Ollama на этом компьютере" Foreground="#B6C8D9" TextWrapping="Wrap"/>
+          <Grid Grid.Row="3" ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBox x:Name="Prompt" PlaceholderText="Напиши сообщение…" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="120"/>
+            <Button x:Name="SendButton" Grid.Column="1" Content="Отправить" Click="Send" VerticalAlignment="Bottom"/>
+          </Grid>
+        </Grid>
+        <StackPanel x:Name="SettingsPage" Visibility="Collapsed" Spacing="20" MaxWidth="540" HorizontalAlignment="Left">
+          <TextBlock Text="Настройки" FontSize="28" FontWeight="SemiBold"/>
+          <TextBlock Text="Сервер Ollama" FontWeight="SemiBold"/>
+          <TextBox x:Name="Endpoint" Text="http://127.0.0.1:11434" Header="Адрес локального сервера"/>
+          <Button Content="Сохранить" Click="SaveSettings"/>
+          <TextBlock x:Name="SettingsStatus" TextWrapping="Wrap" Foreground="#B6C8D9"/>
+          <Button x:Name="LogoutButton" Content="Выйти из Telegram" Click="LogoutTelegram" Visibility="Collapsed" HorizontalAlignment="Left"/>
+          <TextBlock Text="Glassgram 0.2 · C#, WinUI 3 и TDLib" Foreground="#B6C8D9"/>
+        </StackPanel>
+      </Grid>
+    </NavigationView>
+  </Grid>
+</Window>

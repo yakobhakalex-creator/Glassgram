@@ -1,0 +1,154 @@
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+
+namespace Glassgram;
+
+public partial class MainWindow : Window
+{
+    private readonly HttpClient http = new() { Timeout = TimeSpan.FromMinutes(4) };
+    private readonly List<ChatMessage> messages = [];
+    private readonly CancellationTokenSource lifetime = new();
+    private readonly string settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Glassgram", "settings.json");
+    private Preferences preferences = new();
+    private bool busy;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        SystemBackdrop = new DesktopAcrylicBackdrop();
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(TitleBar);
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(1180, 780));
+        try
+        {
+            if (File.Exists(settingsPath))
+                preferences = JsonSerializer.Deserialize<Preferences>(File.ReadAllText(settingsPath)) ?? new();
+            Endpoint.Text = preferences.Endpoint;
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            SettingsStatus.Text = "Не удалось прочитать настройки. " + ex.Message;
+        }
+        Closed += (_, _) => { lifetime.Cancel(); http.Dispose(); };
+        InitializeTelegram();
+    }
+
+    private void Navigate(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        if (ChatsPage is null) return;
+        var page = args.IsSettingsSelected ? "settings" : (args.SelectedItem as NavigationViewItem)?.Tag as string;
+        ChatsPage.Visibility = page == "chats" && telegramReady ? Visibility.Visible : Visibility.Collapsed;
+        AuthPage.Visibility = page == "chats" && !telegramReady ? Visibility.Visible : Visibility.Collapsed;
+        AiPage.Visibility = page == "ai" ? Visibility.Visible : Visibility.Collapsed;
+        SettingsPage.Visibility = page == "settings" ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OpenAi(object sender, RoutedEventArgs args) => Navigation.SelectedItem = Navigation.MenuItems[1];
+
+    private Uri ServerUri()
+    {
+        if (!Uri.TryCreate(preferences.Endpoint, UriKind.Absolute, out var uri) || !uri.IsLoopback || uri.Scheme != "http")
+            throw new InvalidOperationException("Укажи локальный HTTP-адрес Ollama, например http://127.0.0.1:11434.");
+        return uri;
+    }
+
+    private async void RefreshModels(object sender, RoutedEventArgs args)
+    {
+        RefreshButton.IsEnabled = false;
+        AiStatus.Text = "Проверяю доступные модели…";
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+            using var response = await http.GetAsync(new Uri(ServerUri(), "/api/tags"), timeout.Token);
+            response.EnsureSuccessStatusCode();
+            using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(timeout.Token), cancellationToken: timeout.Token);
+            var names = json.RootElement.GetProperty("models").EnumerateArray().Select(m => m.GetProperty("name").GetString()!).ToList();
+            Models.ItemsSource = names;
+            Models.SelectedItem = names.Contains(preferences.Model) ? preferences.Model : names.FirstOrDefault();
+            AiStatus.Text = names.Count == 0 ? "Ollama работает. Установи модель, затем повтори проверку." : "Ollama подключена. Можно отправить сообщение.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            if (!lifetime.IsCancellationRequested) AiStatus.Text = "Не удалось получить модели. Проверь запуск Ollama и адрес в настройках. " + ex.Message;
+        }
+        finally { RefreshButton.IsEnabled = !busy; }
+    }
+
+    private void ModelChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (Models.SelectedItem is string name) preferences.Model = name;
+    }
+
+    private async void Send(object sender, RoutedEventArgs args)
+    {
+        var text = Prompt.Text.Trim();
+        if (busy || text.Length == 0) return;
+        if (Models.SelectedItem is not string model) { AiStatus.Text = "Сначала проверь Ollama и выбери модель."; return; }
+        busy = true;
+        SendButton.IsEnabled = RefreshButton.IsEnabled = Models.IsEnabled = false;
+        AiStatus.Text = "Модель готовит ответ…";
+        var outgoing = new ChatMessage("user", text);
+        try
+        {
+            var history = messages.Append(outgoing).ToArray();
+            using var response = await http.PostAsJsonAsync(new Uri(ServerUri(), "/api/chat"), new { model, messages = history, stream = false }, lifetime.Token);
+            response.EnsureSuccessStatusCode();
+            using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(lifetime.Token), cancellationToken: lifetime.Token);
+            var reply = json.RootElement.GetProperty("message").GetProperty("content").GetString();
+            if (string.IsNullOrWhiteSpace(reply)) throw new InvalidOperationException("Модель вернула пустой ответ.");
+            messages.Add(outgoing);
+            messages.Add(new("assistant", reply));
+            AddMessage("Ты", text);
+            AddMessage(model, reply);
+            if (Prompt.Text.Trim() == text) Prompt.Text = "";
+            AiStatus.Text = "Ответ получен · переписка хранится до закрытия приложения";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            if (!lifetime.IsCancellationRequested) AiStatus.Text = "Ответ не получен. Сообщение можно отправить повторно. " + ex.Message;
+        }
+        finally { busy = false; SendButton.IsEnabled = RefreshButton.IsEnabled = Models.IsEnabled = true; }
+    }
+
+    private void AddMessage(string author, string text)
+    {
+        var block = new StackPanel { Spacing = 6 };
+        block.Children.Add(new TextBlock { Text = author, Opacity = 0.6, FontSize = 12 });
+        block.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, FontSize = 16 });
+        Conversation.Children.Add(block);
+        ConversationScroll.UpdateLayout();
+        ConversationScroll.ChangeView(null, ConversationScroll.ScrollableHeight, null);
+    }
+
+    private void SaveSettings(object sender, RoutedEventArgs args)
+    {
+        var previous = preferences.Endpoint;
+        try
+        {
+            preferences.Endpoint = Endpoint.Text.Trim();
+            ServerUri();
+            Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
+            var temporaryPath = settingsPath + ".tmp";
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(preferences));
+            File.Move(temporaryPath, settingsPath, overwrite: true);
+            SettingsStatus.Text = "Настройки сохранены.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            preferences.Endpoint = previous;
+            SettingsStatus.Text = ex.Message;
+        }
+    }
+}
+
+public record ChatMessage(string role, string content);
+public sealed class Preferences
+{
+    public string Endpoint { get; set; } = "http://127.0.0.1:11434";
+    public string Model { get; set; } = "";
+}
