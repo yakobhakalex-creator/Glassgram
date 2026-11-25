@@ -10,7 +10,11 @@ public partial class App : Application
     private long? notificationChatId;
     private bool notificationsRegistered;
 
-    public App() => InitializeComponent();
+    public App()
+    {
+        InitializeComponent();
+        UnhandledException += (_, args) => ReportRuntimeFailure("Unhandled XAML exception", args.Exception);
+    }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -62,6 +66,18 @@ public partial class App : Application
             var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Glassgram");
             Directory.CreateDirectory(root);
             File.WriteAllText(Path.Combine(root, "startup-error.txt"), exception.GetType().FullName + Environment.NewLine + exception.Message + Environment.NewLine + exception.StackTrace);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    internal static void ReportRuntimeFailure(string area, Exception exception)
+    {
+        try
+        {
+            var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Glassgram");
+            Directory.CreateDirectory(root);
+            File.AppendAllText(Path.Combine(root, "runtime-errors.log"),
+                $"[{DateTimeOffset.Now:O}] {area}{Environment.NewLine}{exception}{Environment.NewLine}{Environment.NewLine}");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }

@@ -83,7 +83,15 @@ public partial class MainWindow
         else
         {
             var copy = update.Clone();
-            DispatcherQueue.TryEnqueue(() => HandleMessengerUpdate(copy));
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                try { HandleMessengerUpdate(copy); }
+                catch (Exception ex)
+                {
+                    App.ReportRuntimeFailure("TDLib update " + copy.Field("@type").Text(), ex);
+                    if (!lifetime.IsCancellationRequested) MessengerStatus.Text = "Ошибка обработки обновления TDLib: " + ex.Message;
+                }
+            });
         }
     }
 

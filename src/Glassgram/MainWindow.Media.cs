@@ -40,10 +40,11 @@ public partial class MainWindow
         {
             if (row.PreviewFileId != 0 && row.PreviewPath.Length == 0)
                 await DownloadMessageFileAsync(row, row.PreviewFileId, false);
-            if ((row.MediaKind == "animation" || row.MediaKind == "sticker") && row.PrimaryFileId != 0 && row.MediaPath.Length == 0)
-                await DownloadMessageFileAsync(row, row.PrimaryFileId, false);
         }
-        catch (Exception ex) when (ex is TdException or OperationCanceledException) { }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or InvalidOperationException)
+        {
+            if (!lifetime.IsCancellationRequested) row.SetTransferError("Ошибка загрузки: " + ex.Message);
+        }
     }
 
     private async Task<string> DownloadMessageFileAsync(MessageRow row, int fileId, bool waitForCompletion)
@@ -53,6 +54,13 @@ public partial class MainWindow
         RegisterMessageFiles(row);
         var existingPath = fileId == row.PrimaryFileId ? row.MediaPath : row.PreviewPath;
         if (existingPath.Length > 0 && File.Exists(existingPath)) return existingPath;
+        var primary = fileId == row.PrimaryFileId;
+        var resolved = await ResolveMessageFileAsync(row, fileId, primary);
+        fileId = resolved.FileId;
+        row.ApplyFile(resolved.File);
+        NotifyMediaFileUpdate(resolved.File);
+        var resolvedPath = resolved.File.Field("local").Field("path").Text();
+        if (IsTdFileReady(resolved.File) && resolvedPath.Length > 0 && File.Exists(resolvedPath)) return resolvedPath;
         TaskCompletionSource<JsonElement>? waiter = null;
         var ownsWaiter = waitForCompletion && !mediaDownloadWaiters.TryGetValue(fileId, out waiter);
         if (ownsWaiter)
@@ -101,6 +109,41 @@ public partial class MainWindow
         }
     }
 
+    private async Task<(int FileId, JsonElement File)> ResolveMessageFileAsync(MessageRow row, int fileId, bool primary)
+    {
+        try
+        {
+            var current = await telegram!.RequestAsync(new { @type = "getFile", file_id = fileId }, lifetime.Token);
+            return (fileId, current);
+        }
+        catch (TdException ex) when (ex.Code == 404 || ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+        {
+            JsonElement message;
+            try
+            {
+                message = await telegram!.RequestAsync(new { @type = "getMessage", chat_id = row.ChatId, message_id = row.Id }, lifetime.Token);
+            }
+            catch (TdException refreshError)
+            {
+                throw new IOException($"TDLib не знает file_id={fileId}, и сообщение {row.Id} не удалось обновить: {refreshError.Message}", refreshError);
+            }
+            row.RefreshMedia(message.Field("content"));
+            RegisterMessageFiles(row);
+            var refreshedId = primary ? row.PrimaryFileId : row.PreviewFileId;
+            if (refreshedId == 0)
+                throw new IOException($"TDLib обновила сообщение {row.Id}, но не вернула актуальный {(primary ? "основной" : "предпросмотровый")} file_id.");
+            try
+            {
+                var refreshed = await telegram!.RequestAsync(new { @type = "getFile", file_id = refreshedId }, lifetime.Token);
+                return (refreshedId, refreshed);
+            }
+            catch (TdException refreshedError)
+            {
+                throw new IOException($"TDLib отклонила актуальный file_id={refreshedId} сообщения {row.Id}: {refreshedError.Message}", refreshedError);
+            }
+        }
+    }
+
     private static bool IsTdFileReady(JsonElement file) => file.Field("local").Field("is_downloading_completed").Flag();
 
     private void NotifyMediaFileUpdate(JsonElement file)
@@ -125,7 +168,7 @@ public partial class MainWindow
             if (row.MediaPath.Length == 0) await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
             if (row.MediaPath.Length == 0) throw new FileNotFoundException($"Файл file_id={row.PrimaryFileId} не готов.");
             if (row.TgsVisibility == Visibility.Visible) await OpenTgsViewerAsync(row);
-            else if (row.MediaKind == "video" || row.InlineVideoVisibility == Visibility.Visible) OpenVideoViewer(row.MediaPath, row.FileName);
+            else if (row.MediaKind == "video" || row.InlineVideoVisibility == Visibility.Visible) await OpenVideoViewerAsync(row.MediaPath, row.FileName);
             else OpenImageViewer(row.MediaPath, row.FileName);
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or TimeoutException or InvalidOperationException)
@@ -156,9 +199,10 @@ public partial class MainWindow
         OpenMediaWindow(image, title.Length == 0 ? "Фотография" : title);
     }
 
-    private void OpenVideoViewer(string path, string title)
+    private async Task OpenVideoViewerAsync(string path, string title)
     {
-        var player = new MediaPlayer { Source = MediaSource.CreateFromUri(new Uri(path)), AutoPlay = true };
+        var source = MediaSource.CreateFromStorageFile(await StorageFile.GetFileFromPathAsync(path));
+        var player = new MediaPlayer { Source = source, AutoPlay = true };
         var element = new MediaPlayerElement { AreTransportControlsEnabled = true, Stretch = Stretch.Uniform };
         element.SetMediaPlayer(player);
         var viewer = OpenMediaWindow(element, title.Length == 0 ? "Видео" : title);
@@ -176,7 +220,8 @@ public partial class MainWindow
         try
         {
             var path = await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
-            var player = new MediaPlayer { Source = MediaSource.CreateFromUri(new Uri(path)), AutoPlay = true };
+            var source = MediaSource.CreateFromStorageFile(await StorageFile.GetFileFromPathAsync(path));
+            var player = new MediaPlayer { Source = source, AutoPlay = true };
             playerElement.SetMediaPlayer(player);
             playerElement.Visibility = Visibility.Visible;
             if (preview is not null) preview.Visibility = Visibility.Collapsed;

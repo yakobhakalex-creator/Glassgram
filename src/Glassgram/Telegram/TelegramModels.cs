@@ -263,6 +263,27 @@ internal sealed class MessageRow : INotifyPropertyChanged
         ApplyInitialFile(preview, false);
     }
 
+    public void RefreshMedia(JsonElement content)
+    {
+        MediaKind = StickerFormat = FileName = MimeType = MediaPath = PreviewPath = "";
+        PrimaryFileId = PreviewFileId = 0;
+        FileSize = 0;
+        TransferProgress = 0;
+        TransferText = "";
+        IsDownloadCompleted = IsDownloadingActive = false;
+        CanBeDownloaded = true;
+        MediaPreview = null;
+        ReadMedia(content);
+        RaiseMedia();
+    }
+
+    public void SetTransferError(string message)
+    {
+        IsDownloadingActive = false;
+        TransferText = message;
+        RaiseMedia();
+    }
+
     private void ApplyInitialFile(JsonElement file, bool primary)
     {
         if (file.ValueKind != JsonValueKind.Object) return;

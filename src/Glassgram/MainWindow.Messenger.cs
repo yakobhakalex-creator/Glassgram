@@ -347,7 +347,11 @@ public partial class MainWindow
         foreach (var message in received)
         {
             var row = MessageRow.FromJson(message);
-            if (row.Id != 0 && history.Messages.TryAdd(row.Id, row)) added++;
+            if (row.Id == 0) continue;
+            if (!history.Messages.ContainsKey(row.Id)) added++;
+            // A TDLib file id belongs to the current client/database state. Always replace
+            // a cached message with the fresh TDLib object instead of retaining stale ids.
+            history.Messages[row.Id] = row;
         }
         UpdateOldestMessage(history);
         if (received.Length == 0 || (fromMessageId != 0 && added == 0)) history.HasMore = false;
