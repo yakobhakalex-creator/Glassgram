@@ -50,8 +50,9 @@ public partial class MainWindow : Window
             MinimizeToTrayChoice.IsOn = preferences.MinimizeToTray;
             applyingGlassSettings = true;
             LiquidGlassChoice.IsOn = preferences.LiquidGlass;
-            AdaptiveWallpaperChoice.IsOn = preferences.AdaptiveWallpaper;
-            WallpaperChoice.SelectedIndex = preferences.AdaptiveWallpaper ? 0 : preferences.Wallpaper switch { "Custom" => 1, "Tahoe" => 2, "Pacific" => 3, "Graphite" => 4, _ => 0 };
+            if (preferences.Wallpaper is not ("Custom" or "Solid")) preferences.Wallpaper = "Windows";
+            AdaptiveWallpaperChoice.IsOn = preferences.Wallpaper == "Windows";
+            WallpaperChoice.SelectedIndex = preferences.Wallpaper switch { "Custom" => 1, "Solid" => 2, _ => 0 };
             TransparencyChoice.Value = preferences.Transparency;
             BlurChoice.Value = preferences.BlurIntensity;
             SaturationChoice.Value = preferences.GlassSaturation;
@@ -270,8 +271,8 @@ public partial class MainWindow : Window
     private void ReadGlassSettings()
     {
         preferences.LiquidGlass = LiquidGlassChoice.IsOn;
-        preferences.Wallpaper = (WallpaperChoice.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "Tahoe";
-        preferences.AdaptiveWallpaper = AdaptiveWallpaperChoice.IsOn;
+        preferences.Wallpaper = (WallpaperChoice.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "Windows";
+        preferences.AdaptiveWallpaper = preferences.Wallpaper == "Windows";
         preferences.Transparency = TransparencyChoice.Value;
         preferences.BlurIntensity = BlurChoice.Value;
         preferences.GlassSaturation = SaturationChoice.Value;
@@ -288,8 +289,7 @@ public partial class MainWindow : Window
     private async Task ApplyGlassSettingsAsync(int version)
     {
         SystemBackdrop = preferences.LiquidGlass && preferences.ComplexEffects && preferences.BlurIntensity > 10 ? new DesktopAcrylicBackdrop() : new MicaBackdrop();
-        var wallpaperPath = preferences.AdaptiveWallpaper || preferences.Wallpaper == "Windows"
-            ? GetWindowsWallpaperPath()
+        var wallpaperPath = preferences.Wallpaper == "Windows" ? GetWindowsWallpaperPath()
             : preferences.Wallpaper == "Custom" ? preferences.CustomWallpaperPath : "";
         Windows.UI.Color? sampled = null;
         if (wallpaperPath.Length > 0 && File.Exists(wallpaperPath))
@@ -297,21 +297,28 @@ public partial class MainWindow : Window
             try
             {
                 WallpaperLayer.Source = new BitmapImage(new Uri(wallpaperPath));
+                WallpaperPreview.Source = new BitmapImage(new Uri(wallpaperPath));
                 sampled = await SampleWallpaperColorAsync(wallpaperPath);
                 currentWallpaperPath = wallpaperPath;
-                WallpaperStatus.Text = Path.GetFileName(wallpaperPath);
+                WallpaperStatus.Text = $"{(preferences.Wallpaper == "Windows" ? "System Wallpaper" : "Custom Wallpaper")}\n{Path.GetFileName(wallpaperPath)}";
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or COMException)
             {
+                WallpaperLayer.Source = null;
+                WallpaperPreview.Source = null;
+                currentWallpaperPath = "";
                 WallpaperStatus.Text = "Не удалось открыть фон: " + ex.Message;
             }
         }
         else
         {
             WallpaperLayer.Source = null;
-            Root.Background = WallpaperBrush(preferences.Wallpaper, lightTheme);
+            WallpaperPreview.Source = null;
+            Root.Background = WallpaperBrush("Solid", lightTheme);
             currentWallpaperPath = "";
-            WallpaperStatus.Text = preferences.AdaptiveWallpaper ? "Обои Windows не найдены — используется резервный фон" : "Встроенный фон";
+            WallpaperStatus.Text = preferences.Wallpaper == "Solid" ? "Solid Background" : preferences.Wallpaper == "Custom"
+                ? "Custom Wallpaper: выбранный файл недоступен. Выберите изображение заново."
+                : "System Wallpaper: Windows не вернула доступный файл.";
         }
         if (version != glassApplyVersion || lifetime.IsCancellationRequested) return;
         var opacity = preferences.LiquidGlass ? (byte)Math.Clamp(255 - preferences.Transparency * 2.15, 45, 205) : (byte)245;
@@ -354,7 +361,7 @@ public partial class MainWindow : Window
 
     private void WallpaperTimerTick(object? sender, object args)
     {
-        if (!preferences.AdaptiveWallpaper && preferences.Wallpaper != "Windows") return;
+        if (preferences.Wallpaper != "Windows") return;
         var path = GetWindowsWallpaperPath();
         if (!string.Equals(path, currentWallpaperPath, StringComparison.OrdinalIgnoreCase)) ApplyGlassSettings();
     }
@@ -392,6 +399,8 @@ public partial class MainWindow : Window
 
     private static Brush WallpaperBrush(string wallpaper, bool light)
     {
+        if (wallpaper == "Solid")
+            return new SolidColorBrush(light ? Windows.UI.Color.FromArgb(255, 222, 232, 240) : Windows.UI.Color.FromArgb(255, 17, 27, 38));
         var brush = new LinearGradientBrush { StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = new Windows.Foundation.Point(1, 1) };
         var colors = wallpaper switch
         {

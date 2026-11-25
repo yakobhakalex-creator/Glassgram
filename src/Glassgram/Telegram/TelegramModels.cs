@@ -65,6 +65,9 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
     public long Order => GetOrder("chatListMain");
     public bool IsMain { get; private set; }
     public bool IsArchive { get; private set; }
+    public bool IsPinned { get; private set; }
+    public bool IsMarkedUnread { get; private set; }
+    public bool IsMuted { get; private set; }
     public bool IsSaved { get; set; }
     public long UserId { get; private set; }
     public string Kind { get; private set; } = "";
@@ -86,6 +89,8 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
         UnreadCount = (int)chat.Field("unread_count").Number();
         UnreadText = UnreadCount > 99 ? "99+" : UnreadCount.ToString();
         LastReadOutboxId = chat.Field("last_read_outbox_message_id").Number();
+        IsMarkedUnread = chat.Field("is_marked_as_unread").Flag();
+        IsMuted = chat.Field("notification_settings").Field("mute_for").Number() > 0;
         UserId = chat.Field("type").Field("@type").Text() == "chatTypePrivate" ? chat.Field("type").Field("user_id").Number() : 0;
         Kind = chat.Field("type").Field("@type").Text();
         var permissions = chat.Field("permissions");
@@ -99,11 +104,13 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
         listOrders.Clear();
         IsMain = false;
         IsArchive = false;
+        IsPinned = false;
         foreach (var position in chat.Field("positions").Items())
         {
             var list = position.Field("list").Field("@type").Text();
             var order = position.Field("order").Number();
             ApplyList(list, order != 0, order);
+            if (position.Field("is_pinned").Flag()) IsPinned = true;
         }
         var small = chat.Field("photo").Field("small");
         PhotoFileId = (int)small.Field("id").Number();

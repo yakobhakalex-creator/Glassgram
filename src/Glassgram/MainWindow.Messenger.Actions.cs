@@ -7,6 +7,9 @@ using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using Windows.System;
 
 namespace Glassgram;
 
@@ -285,9 +288,12 @@ public partial class MainWindow
         item.RightTapped += ShowMessageContextMenu;
     }
 
-    private void ShowMessageContextMenu(object sender, RightTappedRoutedEventArgs args)
+    private async void ShowMessageContextMenu(object sender, RightTappedRoutedEventArgs args)
     {
         if (sender is not ListViewItem target || target.Content is not MessageRow row || row.IsDate) return;
+        JsonElement properties;
+        try { properties = await telegram!.RequestAsync(new { @type = "getMessageProperties", chat_id = row.ChatId, message_id = row.Id }, lifetime.Token); }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException) { MessengerStatus.Text = "Не удалось получить доступные действия. " + ex.Message; return; }
         var menu = new MenuFlyout();
         var copy = new MenuFlyoutItem { Text = "Копировать текст", DataContext = row };
         var copyLink = new MenuFlyoutItem { Text = "Копировать ссылку", DataContext = row };
@@ -295,6 +301,7 @@ public partial class MainWindow
         var select = new MenuFlyoutItem { Text = "Выделить", DataContext = row };
         var reply = new MenuFlyoutItem { Text = "Ответить", DataContext = row };
         var edit = new MenuFlyoutItem { Text = "Изменить", DataContext = row };
+        var favorite = new MenuFlyoutItem { Text = "В избранное", DataContext = row };
         var delete = new MenuFlyoutItem { Text = "Удалить", DataContext = row };
         reply.Click += ContextReply;
         edit.Click += ContextEdit;
@@ -303,16 +310,71 @@ public partial class MainWindow
         copyLink.Click += CopyMessageLink;
         forward.Click += ContextForward;
         select.Click += ContextSelect;
-        menu.Items.Add(copy);
-        menu.Items.Add(copyLink);
-        menu.Items.Add(forward);
+        favorite.Click += SaveMessageToFavorites;
+        if (properties.Field("can_be_replied").Flag()) menu.Items.Add(reply);
+        if (row.Text.Length > 0) menu.Items.Add(copy);
+        if (properties.Field("can_be_forwarded").Flag()) menu.Items.Add(forward);
+        if (properties.Field("can_be_edited").Flag()) menu.Items.Add(edit);
+        if (savedChatId != 0 && row.ChatId != savedChatId && properties.Field("can_be_forwarded").Flag()) menu.Items.Add(favorite);
+        if (properties.Field("can_get_link").Flag()) menu.Items.Add(copyLink);
+        if (row.MediaKind.Length > 0)
+        {
+            menu.Items.Add(new MenuFlyoutSeparator());
+            var open = new MenuFlyoutItem { Text = "Открыть медиа", DataContext = row };
+            var save = new MenuFlyoutItem { Text = "Сохранить как…", DataContext = row };
+            var copyMedia = new MenuFlyoutItem { Text = "Копировать медиа", DataContext = row };
+            open.Click += ContextOpenMedia; save.Click += ContextSaveMedia; copyMedia.Click += ContextCopyMedia;
+            menu.Items.Add(open); menu.Items.Add(save); menu.Items.Add(copyMedia);
+        }
+        if (row.PrimaryLink.Length > 0)
+        {
+            menu.Items.Add(new MenuFlyoutSeparator());
+            var openLink = new MenuFlyoutItem { Text = "Открыть ссылку", DataContext = row };
+            var copyAddress = new MenuFlyoutItem { Text = "Копировать адрес", DataContext = row };
+            openLink.Click += ContextOpenLink; copyAddress.Click += ContextCopyAddress;
+            menu.Items.Add(openLink); menu.Items.Add(copyAddress);
+        }
         menu.Items.Add(select);
-        menu.Items.Add(reply);
-        menu.Items.Add(edit);
-        menu.Items.Add(delete);
+        if (properties.Field("can_be_deleted_only_for_self").Flag() || properties.Field("can_be_deleted_for_all_users").Flag()) menu.Items.Add(delete);
         menu.ShowAt(target);
         args.Handled = true;
     }
+
+    private async void SaveMessageToFavorites(object sender, RoutedEventArgs args)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not MessageRow row || telegram is null || savedChatId == 0) return;
+        try { await telegram.RequestAsync(new { @type = "forwardMessages", chat_id = savedChatId, topic_id = (object?)null, from_chat_id = row.ChatId, message_ids = new[] { row.Id }, options = (object?)null, send_copy = true, remove_caption = false }, lifetime.Token); MessengerStatus.Text = "Сообщение сохранено в Избранное."; }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException) { MessengerStatus.Text = "Не удалось сохранить сообщение. " + ex.Message; }
+    }
+
+    private void ContextOpenMedia(object sender, RoutedEventArgs args) => OpenMessageMedia(sender, new TappedRoutedEventArgs());
+
+    private async void ContextSaveMedia(object sender, RoutedEventArgs args)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not MessageRow row || row.PrimaryFileId == 0) return;
+        try
+        {
+            var path = await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
+            var extension = Path.GetExtension(path); if (extension.Length < 2) extension = ".bin";
+            var picker = new FileSavePicker { SuggestedFileName = row.FileName.Length > 0 ? row.FileName : "telegram-media" + extension };
+            picker.FileTypeChoices.Add("Файл", new[] { extension });
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            var destination = await picker.PickSaveFileAsync(); if (destination is null) return;
+            await (await StorageFile.GetFileFromPathAsync(path)).CopyAndReplaceAsync(destination);
+            MessengerStatus.Text = "Медиа сохранено.";
+        }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException) { MessengerStatus.Text = "Не удалось сохранить медиа. " + ex.Message; }
+    }
+
+    private async void ContextCopyMedia(object sender, RoutedEventArgs args)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not MessageRow row || row.PrimaryFileId == 0) return;
+        try { var file = await StorageFile.GetFileFromPathAsync(await DownloadMessageFileAsync(row, row.PrimaryFileId, true)); var data = new DataPackage(); data.SetStorageItems(new[] { file }); Clipboard.SetContent(data); }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException) { MessengerStatus.Text = "Не удалось скопировать медиа. " + ex.Message; }
+    }
+
+    private async void ContextOpenLink(object sender, RoutedEventArgs args) { if ((sender as FrameworkElement)?.DataContext is MessageRow row && Uri.TryCreate(row.PrimaryLink, UriKind.Absolute, out var uri)) await Launcher.LaunchUriAsync(uri); }
+    private void ContextCopyAddress(object sender, RoutedEventArgs args) { if ((sender as FrameworkElement)?.DataContext is not MessageRow row) return; var data = new DataPackage(); data.SetText(row.PrimaryLink); Clipboard.SetContent(data); }
 
     private async void ContextEdit(object sender, RoutedEventArgs args)
     {
