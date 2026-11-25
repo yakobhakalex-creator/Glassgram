@@ -104,6 +104,67 @@ public partial class MainWindow
         viewer.Closed += (_, _) => player.Dispose();
     }
 
+    private async void PlayInlineVideo(object sender, RoutedEventArgs args)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not MessageRow row || sender is not Button playButton) return;
+        var host = FindAncestor<Grid>(playButton);
+        var playerElement = host?.Children.OfType<MediaPlayerElement>().FirstOrDefault();
+        var preview = host?.Children.OfType<Image>().FirstOrDefault();
+        if (playerElement is null) return;
+        playButton.IsEnabled = false;
+        try
+        {
+            await DownloadMessageFileAsync(row, row.PrimaryFileId, false);
+            for (var attempt = 0; attempt < 40 && (row.MediaPath.Length == 0 || !File.Exists(row.MediaPath)); attempt++)
+                await Task.Delay(125, lifetime.Token);
+            if (row.MediaPath.Length == 0 || !File.Exists(row.MediaPath))
+            {
+                await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
+                if (row.MediaPath.Length == 0) return;
+            }
+            var player = new MediaPlayer { Source = MediaSource.CreateFromUri(new Uri(row.MediaPath)), AutoPlay = true };
+            playerElement.SetMediaPlayer(player);
+            playerElement.Visibility = Visibility.Visible;
+            if (preview is not null) preview.Visibility = Visibility.Collapsed;
+            playButton.Visibility = Visibility.Collapsed;
+            player.MediaFailed += (_, eventArgs) => DispatcherQueue.TryEnqueue(() => MessengerStatus.Text = "Видео не воспроизводится. " + eventArgs.ErrorMessage);
+        }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException)
+        {
+            if (!lifetime.IsCancellationRequested) MessengerStatus.Text = "Не удалось запустить видео. " + ex.Message;
+        }
+        finally { playButton.IsEnabled = true; }
+    }
+
+    private async void SaveOriginalVideo(object sender, RoutedEventArgs args)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not MessageRow row || row.PrimaryFileId == 0) return;
+        try
+        {
+            await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
+            if (row.MediaPath.Length == 0) return;
+            var picker = new FileSavePicker { SuggestedFileName = row.FileName.Length > 0 ? row.FileName : "video.mp4" };
+            picker.FileTypeChoices.Add("Видео", new[] { Path.GetExtension(row.MediaPath) is { Length: > 1 } extension ? extension : ".mp4" });
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            var destination = await picker.PickSaveFileAsync();
+            if (destination is null) return;
+            var source = await StorageFile.GetFileFromPathAsync(row.MediaPath);
+            await source.CopyAndReplaceAsync(destination);
+            MessengerStatus.Text = "Оригинал сохранён.";
+        }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException)
+        {
+            if (!lifetime.IsCancellationRequested) MessengerStatus.Text = "Не удалось сохранить видео. " + ex.Message;
+        }
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? child) where T : DependencyObject
+    {
+        for (var current = child; current is not null; current = VisualTreeHelper.GetParent(current))
+            if (current is T match) return match;
+        return null;
+    }
+
     private Window OpenMediaWindow(UIElement content, string title)
     {
         var viewer = new Window { Title = title, Content = content };

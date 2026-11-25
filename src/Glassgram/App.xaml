@@ -16,5 +16,13 @@
     </ResourceDictionary.ThemeDictionaries>
     <ResourceDictionary.MergedDictionaries>
     <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
-  </ResourceDictionary.MergedDictionaries></ResourceDictionary></Application.Resources>
+  </ResourceDictionary.MergedDictionaries>
+    <Style TargetType="MenuFlyoutPresenter">
+      <Setter Property="Background" Value="{ThemeResource GlassPanelBrush}"/>
+      <Setter Property="BorderBrush" Value="#55FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="14"/>
+      <Setter Property="Padding" Value="6"/>
+    </Style>
+  </ResourceDictionary></Application.Resources>
 </Application>

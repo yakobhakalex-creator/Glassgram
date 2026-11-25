@@ -121,9 +121,11 @@
                         </Border>
                         <StackPanel Visibility="{Binding MediaVisibility}" Loaded="MessageMediaLoaded" Spacing="5">
                           <Image Source="{Binding MediaPreview}" Visibility="{Binding ImageVisibility}" MaxWidth="440" MaxHeight="360" Stretch="Uniform" Tapped="OpenMessageMedia"/>
-                          <Grid Visibility="{Binding VideoVisibility}" Tapped="OpenMessageMedia" MinWidth="260" MinHeight="150">
-                            <Image Source="{Binding MediaPreview}" MaxWidth="440" MaxHeight="300" Stretch="UniformToFill" Opacity="0.85"/>
-                            <FontIcon Glyph="&#xE768;" FontSize="46" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                          <Grid Visibility="{Binding VideoVisibility}" MinWidth="280" MinHeight="170">
+                            <Image Source="{Binding MediaPreview}" MaxWidth="440" MaxHeight="300" Stretch="UniformToFill" Opacity="0.9"/>
+                            <MediaPlayerElement Visibility="Collapsed" AreTransportControlsEnabled="True" Stretch="Uniform" MaxWidth="520" MinHeight="210"/>
+                            <Button Content="▶" FontSize="26" Width="58" Height="58" CornerRadius="29" HorizontalAlignment="Center" VerticalAlignment="Center" Click="PlayInlineVideo"/>
+                            <Button Content="Скачать оригинал" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Click="SaveOriginalVideo"/>
                           </Grid>
                           <Button Visibility="{Binding InlineVideoVisibility}" Content="▶ Воспроизвести анимацию" Tapped="OpenMessageMedia" HorizontalAlignment="Left"/>
                           <Button Visibility="{Binding TgsVisibility}" Content="▶ Анимированный стикер" Tapped="OpenMessageMedia" HorizontalAlignment="Left"/>
@@ -211,7 +213,7 @@
             <Button x:Name="AgentSendButton" Grid.Column="1" Content="Запустить" Click="RunAgent" VerticalAlignment="Bottom"/>
           </Grid>
         </Grid>
-        <StackPanel x:Name="SettingsPage" Visibility="Collapsed" Spacing="20" MaxWidth="540" HorizontalAlignment="Left">
+        <ScrollViewer x:Name="SettingsPage" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalScrollBarVisibility="Auto"><StackPanel Spacing="20" MaxWidth="540" HorizontalAlignment="Left" Padding="0,0,16,24">
           <TextBlock Text="Настройки" FontSize="28" FontWeight="SemiBold"/>
           <TextBlock Text="Сервер Ollama" FontWeight="SemiBold"/>
           <TextBox x:Name="Endpoint" Text="http://127.0.0.1:11434" Header="Адрес локального сервера"/>
@@ -222,11 +224,18 @@
             <ComboBoxItem Content="Enter отправляет" Tag="Enter"/><ComboBoxItem Content="Ctrl+Enter отправляет" Tag="CtrlEnter"/>
           </ComboBox>
           <ToggleSwitch x:Name="MinimizeToTrayChoice" Header="Ctrl+W сворачивает приложение"/>
+          <ToggleSwitch x:Name="LiquidGlassChoice" Header="Liquid Glass" Toggled="GlassSettingChanged"/>
+          <ComboBox x:Name="WallpaperChoice" Header="Обои чата" SelectionChanged="GlassSettingChanged" MinWidth="240">
+            <ComboBoxItem Content="Tahoe Blue" Tag="Tahoe"/><ComboBoxItem Content="Pacific Mist" Tag="Pacific"/><ComboBoxItem Content="Graphite Aurora" Tag="Graphite"/>
+          </ComboBox>
+          <StackPanel Spacing="4"><TextBlock Text="Прозрачность"/><Slider x:Name="TransparencyChoice" Minimum="0" Maximum="90" StepFrequency="5" ValueChanged="GlassSettingChanged"/></StackPanel>
+          <StackPanel Spacing="4"><TextBlock Text="Интенсивность размытия"/><Slider x:Name="BlurChoice" Minimum="0" Maximum="100" StepFrequency="5" ValueChanged="GlassSettingChanged"/></StackPanel>
+          <ToggleSwitch x:Name="AnimationsChoice" Header="Анимации интерфейса" Toggled="GlassSettingChanged"/>
           <Button Content="Сохранить" Click="SaveSettings"/>
           <TextBlock x:Name="SettingsStatus" TextWrapping="Wrap" Foreground="#B6C8D9"/>
           <Button x:Name="LogoutButton" Content="Выйти из Telegram" Click="LogoutTelegram" Visibility="Collapsed" HorizontalAlignment="Left"/>
-          <TextBlock Text="Glassgram 0.4.0 · C#, WinUI 3 и TDLib" Foreground="#B6C8D9"/>
-        </StackPanel>
+          <TextBlock Text="Glassgram 0.5.0 · C#, WinUI 3 и TDLib" Foreground="#B6C8D9"/>
+        </StackPanel></ScrollViewer>
       </Grid>
     </NavigationView>
   </Grid>

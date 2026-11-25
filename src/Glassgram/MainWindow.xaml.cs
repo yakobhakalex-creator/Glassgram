@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Hosting;
 
 namespace Glassgram;
 
@@ -17,6 +18,7 @@ public partial class MainWindow : Window
     private bool busy;
     private bool agentBusy;
     private bool lightTheme;
+    private bool applyingGlassSettings;
 
     public MainWindow()
     {
@@ -36,7 +38,15 @@ public partial class MainWindow : Window
             ThemeChoice.SelectedIndex = preferences.Theme == "Light" ? 1 : 0;
             SendModeChoice.SelectedIndex = preferences.SendMode == "CtrlEnter" ? 1 : 0;
             MinimizeToTrayChoice.IsOn = preferences.MinimizeToTray;
+            applyingGlassSettings = true;
+            LiquidGlassChoice.IsOn = preferences.LiquidGlass;
+            WallpaperChoice.SelectedIndex = preferences.Wallpaper switch { "Pacific" => 1, "Graphite" => 2, _ => 0 };
+            TransparencyChoice.Value = preferences.Transparency;
+            BlurChoice.Value = preferences.BlurIntensity;
+            AnimationsChoice.IsOn = preferences.Animations;
+            applyingGlassSettings = false;
             ApplyTheme();
+            ApplyGlassSettings();
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -56,6 +66,8 @@ public partial class MainWindow : Window
         AiPage.Visibility = page == "ai" ? Visibility.Visible : Visibility.Collapsed;
         AgentPage.Visibility = page == "agent" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = page == "settings" ? Visibility.Visible : Visibility.Collapsed;
+        var visiblePage = page switch { "chats" => (FrameworkElement)(telegramReady ? ChatsPage : AuthPage), "ai" => AiPage, "agent" => AgentPage, "settings" => SettingsPage, _ => null };
+        if (visiblePage is not null) AnimatePage(visiblePage);
     }
 
     private void OpenAi(object sender, RoutedEventArgs args) => Navigation.SelectedItem = Navigation.MenuItems[1];
@@ -191,6 +203,7 @@ public partial class MainWindow : Window
             preferences.Endpoint = Endpoint.Text.Trim();
             preferences.SendMode = (SendModeChoice.SelectedItem as ComboBoxItem)?.Tag?.ToString() == "CtrlEnter" ? "CtrlEnter" : "Enter";
             preferences.MinimizeToTray = MinimizeToTrayChoice.IsOn;
+            ReadGlassSettings();
             ServerUri();
             SavePreferences();
             SettingsStatus.Text = "Настройки сохранены.";
@@ -215,6 +228,71 @@ public partial class MainWindow : Window
         lightTheme = preferences.Theme == "Light";
         Root.RequestedTheme = lightTheme ? ElementTheme.Light : ElementTheme.Dark;
         RefreshReadMarks();
+        ApplyGlassSettings();
+    }
+
+    private void GlassSettingChanged(object sender, RoutedEventArgs args)
+    {
+        if (applyingGlassSettings || Root is null) return;
+        ReadGlassSettings();
+        ApplyGlassSettings();
+        SavePreferences();
+    }
+
+    private void ReadGlassSettings()
+    {
+        preferences.LiquidGlass = LiquidGlassChoice.IsOn;
+        preferences.Wallpaper = (WallpaperChoice.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "Tahoe";
+        preferences.Transparency = TransparencyChoice.Value;
+        preferences.BlurIntensity = BlurChoice.Value;
+        preferences.Animations = AnimationsChoice.IsOn;
+    }
+
+    private void ApplyGlassSettings()
+    {
+        if (Root is null) return;
+        SystemBackdrop = preferences.LiquidGlass ? new DesktopAcrylicBackdrop() : new MicaBackdrop();
+        Root.Background = WallpaperBrush(preferences.Wallpaper, lightTheme);
+        var opacity = preferences.LiquidGlass ? (byte)Math.Clamp(255 - preferences.Transparency * 2.15, 45, 205) : (byte)245;
+        var tint = lightTheme ? Windows.UI.Color.FromArgb(opacity, 235, 244, 250) : Windows.UI.Color.FromArgb(opacity, 24, 39, 54);
+        var conversationTint = lightTheme ? Windows.UI.Color.FromArgb((byte)(opacity * .82), 225, 239, 248) : Windows.UI.Color.FromArgb((byte)(opacity * .72), 18, 31, 45);
+        var panel = new SolidColorBrush(tint);
+        ChatListPanel.Background = panel;
+        MessagesPanel.Background = new SolidColorBrush(conversationTint);
+        ConversationHeader.Background = new SolidColorBrush(tint);
+        ComposerPanel.Background = new SolidColorBrush(tint);
+        Navigation.Background = new SolidColorBrush(Windows.UI.Color.FromArgb((byte)(opacity * .72), tint.R, tint.G, tint.B));
+        var highlight = preferences.LiquidGlass ? (byte)Math.Clamp(25 + preferences.BlurIntensity * .7, 25, 95) : (byte)30;
+        ChatListPanel.BorderBrush = MessagesPanel.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(highlight, 255, 255, 255));
+    }
+
+    private static Brush WallpaperBrush(string wallpaper, bool light)
+    {
+        var brush = new LinearGradientBrush { StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = new Windows.Foundation.Point(1, 1) };
+        var colors = wallpaper switch
+        {
+            "Pacific" => light ? ("#FFDCEEF5", "#FF91B7C9") : ("#FF102534", "#FF31586A"),
+            "Graphite" => light ? ("#FFE7E9EE", "#FFADB8C8") : ("#FF141821", "#FF354356"),
+            _ => light ? ("#FFE5F2FA", "#FF93B8D5") : ("#FF0B1628", "#FF294967")
+        };
+        brush.GradientStops.Add(new GradientStop { Color = ColorFromHex(colors.Item1), Offset = 0 });
+        brush.GradientStops.Add(new GradientStop { Color = ColorFromHex(colors.Item2), Offset = 1 });
+        return brush;
+    }
+
+    private static Windows.UI.Color ColorFromHex(string value) => Windows.UI.Color.FromArgb(
+        Convert.ToByte(value.Substring(1, 2), 16), Convert.ToByte(value.Substring(3, 2), 16),
+        Convert.ToByte(value.Substring(5, 2), 16), Convert.ToByte(value.Substring(7, 2), 16));
+
+    private void AnimatePage(FrameworkElement page)
+    {
+        if (!preferences.Animations) return;
+        var visual = ElementCompositionPreview.GetElementVisual(page);
+        var animation = visual.Compositor.CreateScalarKeyFrameAnimation();
+        animation.InsertKeyFrame(0, 0.72f);
+        animation.InsertKeyFrame(1, 1);
+        animation.Duration = TimeSpan.FromMilliseconds(180);
+        visual.StartAnimation("Opacity", animation);
     }
 
     private void SavePreferences()
@@ -236,4 +314,9 @@ public sealed class Preferences
     public string SendMode { get; set; } = "Enter";
     public bool MinimizeToTray { get; set; }
     public Dictionary<long, string> Drafts { get; set; } = [];
+    public bool LiquidGlass { get; set; } = true;
+    public string Wallpaper { get; set; } = "Tahoe";
+    public double Transparency { get; set; } = 58;
+    public double BlurIntensity { get; set; } = 65;
+    public bool Animations { get; set; } = true;
 }
