@@ -62,10 +62,11 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
     public string AvatarLetter => Title.Length > 0 ? Title[..1].ToUpperInvariant() : "•";
     public ImageSource? Avatar { get; private set; }
     private readonly Dictionary<string, long> listOrders = [];
+    private readonly Dictionary<string, bool> listPinned = [];
     public long Order => GetOrder("chatListMain");
     public bool IsMain { get; private set; }
     public bool IsArchive { get; private set; }
-    public bool IsPinned { get; private set; }
+    public bool IsPinned => IsPinnedIn(IsArchive ? "chatListArchive" : "chatListMain");
     public bool IsMarkedUnread { get; private set; }
     public bool IsMuted { get; private set; }
     public bool IsSaved { get; set; }
@@ -104,13 +105,12 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
         listOrders.Clear();
         IsMain = false;
         IsArchive = false;
-        IsPinned = false;
+        listPinned.Clear();
         foreach (var position in chat.Field("positions").Items())
         {
-            var list = position.Field("list").Field("@type").Text();
+            var list = ListKey(position.Field("list"));
             var order = position.Field("order").Number();
-            ApplyList(list, order != 0, order);
-            if (position.Field("is_pinned").Flag()) IsPinned = true;
+            ApplyList(list, order != 0, order, position.Field("is_pinned").Flag());
         }
         var small = chat.Field("photo").Field("small");
         PhotoFileId = (int)small.Field("id").Number();
@@ -118,15 +118,17 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
         RaiseAll();
     }
 
-    public void ApplyList(string listType, bool present = true, long order = 0)
+    public void ApplyList(string listType, bool present = true, long order = 0, bool pinned = false)
     {
         if (listType == "chatListMain") IsMain = present;
         if (listType == "chatListArchive") IsArchive = present;
-        if (present && order != 0) listOrders[listType] = order;
-        else listOrders.Remove(listType);
+        if (present && order != 0) { listOrders[listType] = order; listPinned[listType] = pinned; }
+        else { listOrders.Remove(listType); listPinned.Remove(listType); }
     }
 
     public long GetOrder(string listType) => listOrders.GetValueOrDefault(listType);
+    public bool IsPinnedIn(string listType) => listPinned.GetValueOrDefault(listType);
+    public static string ListKey(JsonElement list) => list.Field("@type").Text() == "chatListFolder" ? $"chatListFolder:{list.Field("chat_folder_id").Number()}" : list.Field("@type").Text();
 
     public void SetAvatar(string path)
     {

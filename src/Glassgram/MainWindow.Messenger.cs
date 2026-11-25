@@ -44,6 +44,7 @@ public partial class MainWindow
     {
         public Dictionary<long, MessageRow> Messages { get; } = [];
         public long OldestId { get; set; }
+        public long PageCursorId { get; set; }
         public bool HasMore { get; set; } = true;
         public bool Loading { get; set; }
         public DateTime LastUsed { get; set; } = DateTime.UtcNow;
@@ -115,25 +116,24 @@ public partial class MainWindow
                 var chatId = id.Number();
                 if (knownChats.TryGetValue(chatId, out var existing))
                 {
-                    existing.ApplyList(listType);
-                    RefreshChatList();
+                    var refreshed = await client.RequestAsync(new { @type = "getChat", chat_id = chatId }, lifetime.Token);
+                    UpsertChat(refreshed, saved: existing.IsSaved);
                     continue;
                 }
                 var chat = await client.RequestAsync(new { @type = "getChat", chat_id = chatId }, lifetime.Token);
-                UpsertChat(chat, sourceList: listType);
+                UpsertChat(chat);
             }
             if (loadedAll) break;
         }
     }
 
-    private void UpsertChat(JsonElement chat, bool saved = false, string? sourceList = null)
+    private void UpsertChat(JsonElement chat, bool saved = false)
     {
         var id = chat.Field("id").Number();
         if (id == 0) return;
         if (!knownChats.TryGetValue(id, out var row)) knownChats[id] = row = new ChatRow(id);
         row.IsSaved |= saved || id == savedChatId;
         row.Update(chat);
-        if (sourceList is not null && row.GetOrder(sourceList) == 0) row.ApplyList(sourceList);
         if (row.PhotoFileId != 0 && row.Avatar is null)
         {
             avatarFiles[row.PhotoFileId] = id;
@@ -163,7 +163,9 @@ public partial class MainWindow
         var rows = knownChats.Values
             .Where(c => showingArchive ? c.IsArchive : c.IsMain)
             .Where(c => query.Length == 0 || c.Title.Contains(query, StringComparison.CurrentCultureIgnoreCase))
-            .OrderByDescending(c => c.GetOrder(showingArchive ? "chatListArchive" : "chatListMain"))
+            .OrderByDescending(c => c.IsPinnedIn(showingArchive ? "chatListArchive" : "chatListMain"))
+            .ThenByDescending(c => c.GetOrder(showingArchive ? "chatListArchive" : "chatListMain"))
+            .ThenByDescending(c => c.Id)
             .ToArray();
         if (rows.Length == visibleChats.Count && rows.SequenceEqual(visibleChats)) return;
         visibleChats.Clear();
@@ -276,12 +278,13 @@ public partial class MainWindow
                 await ScrollToLatestAsync(chatId);
             }
 
-            await FetchHistoryPageAsync(chatId, history, 0);
-            while (history.HasMore && history.Messages.Count < InitialHistoryLimit)
+            history.PageCursorId = 0;
+            var freshCount = await FetchHistoryPageAsync(chatId, history, 0);
+            while (history.HasMore && freshCount < InitialHistoryLimit)
             {
-                var before = history.Messages.Count;
-                await FetchHistoryPageAsync(chatId, history, history.OldestId);
-                if (history.Messages.Count == before) break;
+                var received = await FetchHistoryPageAsync(chatId, history, history.PageCursorId);
+                if (received == 0) break;
+                freshCount += received;
             }
             TrimToLatest(history, InitialHistoryLimit);
             history.LastUsed = DateTime.UtcNow;
@@ -306,14 +309,14 @@ public partial class MainWindow
 
     private async Task LoadOlderHistoryAsync(long chatId, ChatHistory history)
     {
-        if (history.Loading || !history.HasMore || telegram is null || history.OldestId == 0) return;
+        if (history.Loading || !history.HasMore || telegram is null || history.PageCursorId == 0) return;
         history.Loading = true;
         SetHistoryLoading(chatId, true, "Загружаем старые сообщения…");
         var oldHeight = messageScroller?.ExtentHeight ?? 0;
         var oldOffset = messageScroller?.VerticalOffset ?? 0;
         try
         {
-            await FetchHistoryPageAsync(chatId, history, history.OldestId);
+            await FetchHistoryPageAsync(chatId, history, history.PageCursorId);
             history.LastUsed = DateTime.UtcNow;
             if (activeChat?.Id == chatId)
             {
@@ -343,19 +346,19 @@ public partial class MainWindow
             offset = 0, limit = 100, only_local = false
         }, lifetime.Token);
         var received = result.Field("messages").Items().ToArray();
-        var added = 0;
+        var previousCursor = history.PageCursorId;
         foreach (var message in received)
         {
             var row = MessageRow.FromJson(message);
             if (row.Id == 0) continue;
-            if (!history.Messages.ContainsKey(row.Id)) added++;
             // A TDLib file id belongs to the current client/database state. Always replace
             // a cached message with the fresh TDLib object instead of retaining stale ids.
             history.Messages[row.Id] = row;
         }
         UpdateOldestMessage(history);
-        if (received.Length == 0 || (fromMessageId != 0 && added == 0)) history.HasMore = false;
-        return added;
+        if (received.Length > 0) history.PageCursorId = received.Min(message => message.Field("id").Number());
+        if (received.Length == 0 || history.PageCursorId == 0 || fromMessageId != 0 && history.PageCursorId >= previousCursor) history.HasMore = false;
+        return received.Length;
     }
 
     private static void UpdateOldestMessage(ChatHistory history) =>

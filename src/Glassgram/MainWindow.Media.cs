@@ -374,8 +374,13 @@ public partial class MainWindow
             var path = Path.Combine(MediaCacheRoot, "clipboard-" + Guid.NewGuid().ToString("N") + ".png");
             var bitmap = await content.GetBitmapAsync();
             using var input = (await bitmap.OpenReadAsync()).AsStreamForRead();
-            await using var output = File.Create(path);
-            await input.CopyToAsync(output, lifetime.Token);
+            await using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.WriteThrough))
+            {
+                await input.CopyToAsync(output, lifetime.Token);
+                await output.FlushAsync(lifetime.Token);
+            }
+            if (new FileInfo(path).Length == 0) throw new IOException("Буфер обмена вернул пустое изображение.");
+            await using (var verification = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) { _ = verification.Length; }
             await SendAttachmentAsync(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

@@ -44,7 +44,7 @@ public partial class MainWindow
                 {
                     var position = update.Field("position");
                     var order = position.Field("order").Number();
-                    positioned.ApplyList(position.Field("list").Field("@type").Text(), order != 0, order);
+                    positioned.ApplyList(ChatRow.ListKey(position.Field("list")), order != 0, order, position.Field("is_pinned").Flag());
                     RefreshChatList();
                 }
                 break;
