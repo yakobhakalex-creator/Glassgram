@@ -392,6 +392,19 @@ public partial class MainWindow
         if (sender is WebView2 { CoreWebView2: { } core }) core.Navigate("about:blank");
     }
 
+    // Viewport-driven playback follows Unigram's StickerContent/AnimatedImage lifecycle
+    // (GPL-3.0, commit 9354bcb753be3b16086bd3886b8adec062ccdd91).
+    private async void InlineWebmViewportChanged(FrameworkElement sender, EffectiveViewportChangedEventArgs args)
+    {
+        if (sender is not WebView2 { CoreWebView2: { } } web) return;
+        try
+        {
+            var visible = args.EffectiveViewport.Width > 0 && args.EffectiveViewport.Height > 0;
+            await web.ExecuteScriptAsync(visible ? "document.querySelector('video')?.play()" : "document.querySelector('video')?.pause()");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException) { }
+    }
+
     private async void InlineTgsLoaded(object sender, RoutedEventArgs args)
     {
         if (sender is not AnimatedVisualPlayer player || player.DataContext is not MessageRow row) return;
@@ -411,6 +424,13 @@ public partial class MainWindow
     private void InlineTgsUnloaded(object sender, RoutedEventArgs args)
     {
         if (sender is AnimatedVisualPlayer player) player.Stop();
+    }
+
+    private async void InlineTgsViewportChanged(FrameworkElement sender, EffectiveViewportChangedEventArgs args)
+    {
+        if (sender is not AnimatedVisualPlayer player) return;
+        if (args.EffectiveViewport.Width > 0 && args.EffectiveViewport.Height > 0) await player.PlayAsync(0, 1, true);
+        else player.Pause();
     }
 
     private async void OpenMessageLink(object sender, RoutedEventArgs args)

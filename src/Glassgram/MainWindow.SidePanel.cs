@@ -3,29 +3,23 @@ using System.Text.Json;
 using Glassgram.Telegram;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+
+// Interaction and paging patterns adapted from Unigram (GPL-3.0), commit
+// 9354bcb753be3b16086bd3886b8adec062ccdd91. See THIRD_PARTY_NOTICES.md.
 
 namespace Glassgram;
 
 public partial class MainWindow
 {
     private readonly ObservableCollection<StickerPanelItem> panelStickers = [];
-    private static readonly string[] TelegramEmoji =
-    [
-        "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃",
-        "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜",
-        "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟",
-        "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠",
-        "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗",
-        "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧",
-        "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧",
-        "😷", "🤒", "🤕", "👍", "👎", "👌", "✌️", "🤞", "🤟", "🤘", "👏", "🙌",
-        "👐", "🤲", "🤝", "🙏", "💪", "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤",
-        "🤍", "🤎", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💯",
-        "🔥", "✨", "🎉", "🎊", "✅", "❌", "⚠️", "💬", "👀", "🚀", "🎁", "⭐"
-    ];
+    private readonly ObservableCollection<StickerSetPanelItem> panelStickerSets = [];
+    private readonly ObservableCollection<SharedMediaItem> profileSharedItems = [];
     private int stickerLoadVersion;
+    private long sharedFromMessageId;
+    private string sharedFilter = "searchMessagesFilterPhotoAndVideo";
 
     private void ShowSidePanel(string title)
     {
@@ -55,6 +49,7 @@ public partial class MainWindow
         ProfileUsername.Text = "";
         ProfileDescription.Text = "";
         ProfileStatus.Text = ActiveChatStatus.Text;
+        ProfileKind.Text = activeChat.UserId != 0 ? "Пользователь" : activeChat.BasicGroupId != 0 ? "Группа" : "Канал или супергруппа";
         try
         {
             if (activeChat.UserId != 0)
@@ -65,6 +60,7 @@ public partial class MainWindow
                 ProfileUsername.Text = Username(user.Field("usernames"));
                 ProfileDescription.Text = full.Field("bio").Field("text").Text();
                 ProfileStatus.Text = DescribeStatus(user.Field("status"));
+                ProfileKind.Text = user.Field("type").Field("@type").Text() == "userTypeBot" ? "Бот" : "Пользователь";
             }
             else if (activeChat.BasicGroupId != 0)
             {
@@ -72,6 +68,7 @@ public partial class MainWindow
                 var full = await telegram.RequestAsync(new { @type = "getBasicGroupFullInfo", basic_group_id = activeChat.BasicGroupId }, lifetime.Token);
                 ProfileStatus.Text = $"{group.Field("member_count").Number()} участников";
                 ProfileDescription.Text = full.Field("description").Text();
+                ProfileKind.Text = "Группа";
             }
             else if (activeChat.SupergroupId != 0)
             {
@@ -80,6 +77,7 @@ public partial class MainWindow
                 ProfileUsername.Text = Username(group.Field("usernames"));
                 ProfileStatus.Text = $"{group.Field("member_count").Number()} участников";
                 ProfileDescription.Text = full.Field("description").Text();
+                ProfileKind.Text = group.Field("is_channel").Flag() ? "Канал" : "Супергруппа";
             }
             var counts = await Task.WhenAll(
                 GetSharedCountAsync("searchMessagesFilterPhotoAndVideo"),
@@ -88,6 +86,8 @@ public partial class MainWindow
             ProfileMediaCount.Text = counts[0].ToString();
             ProfileFileCount.Text = counts[1].ToString();
             ProfileLinkCount.Text = counts[2].ToString();
+            ProfileSharedCategory.SelectedIndex = 0;
+            await LoadSharedMediaAsync(true);
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException or JsonException)
         {
@@ -108,6 +108,55 @@ public partial class MainWindow
         return result.Field("count").Number();
     }
 
+    private async void ProfileSharedCategoryChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (ProfilePanel?.Visibility != Visibility.Visible) return;
+        sharedFilter = (ProfileSharedCategory.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "searchMessagesFilterPhotoAndVideo";
+        await LoadSharedMediaAsync(true);
+    }
+
+    private async void LoadMoreSharedMedia(object sender, RoutedEventArgs args) => await LoadSharedMediaAsync(false);
+
+    private async Task LoadSharedMediaAsync(bool reset)
+    {
+        if (telegram is null || activeChat is null) return;
+        if (reset) { sharedFromMessageId = 0; profileSharedItems.Clear(); }
+        ProfileSharedGrid.ItemsSource = profileSharedItems;
+        ProfileSharedStatus.Text = "Загрузка…";
+        try
+        {
+            var result = await telegram.RequestAsync(new
+            {
+                @type = "searchChatMessages", chat_id = activeChat.Id, topic_id = (object?)null,
+                query = "", sender_id = (object?)null, from_message_id = sharedFromMessageId,
+                offset = 0, limit = 30,
+                filter = new Dictionary<string, object?> { ["@type"] = sharedFilter },
+                message_thread_id = 0L, saved_messages_topic_id = 0L
+            }, lifetime.Token);
+            foreach (var message in result.Field("messages").Items())
+            {
+                var row = MessageRow.FromJson(message);
+                profileSharedItems.Add(new SharedMediaItem(row, row.MediaPreview, row.FileName.Length > 0 ? row.FileName : row.Text, row.PrimaryLink));
+            }
+            sharedFromMessageId = result.Field("next_from_message_id").Number();
+            ProfileSharedMoreButton.Visibility = sharedFromMessageId != 0 ? Visibility.Visible : Visibility.Collapsed;
+            ProfileSharedStatus.Text = profileSharedItems.Count == 0 ? "Ничего не найдено" : $"Показано: {profileSharedItems.Count}";
+        }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or JsonException)
+        {
+            if (!lifetime.IsCancellationRequested) ProfileSharedStatus.Text = "Не удалось загрузить: " + ex.Message;
+        }
+    }
+
+    private async void OpenSharedMedia(object sender, ItemClickEventArgs args)
+    {
+        if (args.ClickedItem is not SharedMediaItem item) return;
+        if (!string.IsNullOrWhiteSpace(item.Link)) { await Windows.System.Launcher.LaunchUriAsync(new Uri(item.Link)); return; }
+        var source = new Border { DataContext = item.Message };
+        if (item.Message.MediaKind == "document") DownloadOrOpenDocument(source, new RoutedEventArgs());
+        else OpenMessageMedia(source, new TappedRoutedEventArgs());
+    }
+
     private async void OpenStickerPanel(object sender, RoutedEventArgs args)
     {
         if (telegram is null || activeChat is null) return;
@@ -115,7 +164,10 @@ public partial class MainWindow
         ProfilePanel.Visibility = Visibility.Collapsed;
         StickersPanel.Visibility = Visibility.Visible;
         StickerGrid.ItemsSource = panelStickers;
-        EmojiGrid.ItemsSource = TelegramEmoji;
+        StickerSetList.ItemsSource = panelStickerSets;
+        EmojiCategory.ItemsSource = UnigramEmojiCatalog.Groups;
+        EmojiCategory.SelectedIndex = Math.Max(0, EmojiCategory.SelectedIndex);
+        EmojiGrid.ItemsSource = UnigramEmojiCatalog.Groups[EmojiCategory.SelectedIndex].Items;
         await LoadStickersAsync((StickerCategory.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "recent");
     }
 
@@ -125,11 +177,60 @@ public partial class MainWindow
         await LoadStickersAsync((StickerCategory.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "recent");
     }
 
+    private void EmojiCategoryChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (EmojiCategory.SelectedItem is UnigramEmojiGroup group) EmojiGrid.ItemsSource = group.Items;
+    }
+
+    private async void StickerSearchKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs args)
+    {
+        if (args.Key == Windows.System.VirtualKey.Enter) await SearchStickersAsync();
+    }
+
+    private async void SearchStickers(object sender, RoutedEventArgs args) => await SearchStickersAsync();
+
+    private async Task SearchStickersAsync()
+    {
+        if (telegram is null || string.IsNullOrWhiteSpace(StickerSearch.Text)) return;
+        var version = ++stickerLoadVersion;
+        panelStickers.Clear(); panelStickerSets.Clear();
+        try
+        {
+            var result = await telegram.RequestAsync(new { @type = "searchStickers", sticker_type = new Dictionary<string, object?> { ["@type"] = "stickerTypeRegular" }, emojis = StickerSearch.Text.Trim(), query = "", input_language_codes = Array.Empty<string>(), offset = 0, limit = 100 }, lifetime.Token);
+            foreach (var sticker in result.Field("stickers").Items())
+            {
+                if (version != stickerLoadVersion) return;
+                if (await CreateStickerItemAsync(sticker) is { } item) panelStickers.Add(item);
+            }
+            SidePanelTitle.Text = "Поиск стикеров";
+        }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or JsonException or IOException) { MessengerStatus.Text = "Поиск стикеров не выполнен. " + ex.Message; }
+    }
+
+    private async void OpenStickerSet(object sender, ItemClickEventArgs args)
+    {
+        if (args.ClickedItem is not StickerSetPanelItem set || telegram is null) return;
+        var version = ++stickerLoadVersion; panelStickers.Clear();
+        try
+        {
+            var full = await telegram.RequestAsync(new { @type = "getStickerSet", set_id = set.Id }, lifetime.Token);
+            foreach (var sticker in full.Field("stickers").Items())
+            {
+                if (version != stickerLoadVersion) return;
+                if (await CreateStickerItemAsync(sticker) is { } item) panelStickers.Add(item);
+            }
+            SidePanelTitle.Text = set.Title;
+        }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or JsonException or IOException) { MessengerStatus.Text = "Набор не загружен. " + ex.Message; }
+    }
+
     private async Task LoadStickersAsync(string category)
     {
         var emoji = category == "emoji";
         EmojiGrid.Visibility = emoji ? Visibility.Visible : Visibility.Collapsed;
         StickerGrid.Visibility = emoji ? Visibility.Collapsed : Visibility.Visible;
+        EmojiCategory.Visibility = emoji ? Visibility.Visible : Visibility.Collapsed;
+        StickerSetList.Visibility = !emoji && category == "installed" ? Visibility.Visible : Visibility.Collapsed;
         if (emoji)
         {
             stickerLoadVersion++;
@@ -139,6 +240,7 @@ public partial class MainWindow
         if (telegram is null) return;
         var version = ++stickerLoadVersion;
         panelStickers.Clear();
+        panelStickerSets.Clear();
         SidePanelTitle.Text = category switch { "favorite" => "Избранные стикеры", "installed" => "Наборы стикеров", _ => "Недавние стикеры" };
         try
         {
@@ -150,9 +252,10 @@ public partial class MainWindow
                 var sets = (await telegram.RequestAsync(new { @type = "getInstalledStickerSets", sticker_type = new Dictionary<string, object?> { ["@type"] = "stickerTypeRegular" } }, lifetime.Token)).Field("sets").Items().Take(12).ToArray();
                 foreach (var set in sets)
                 {
+                    panelStickerSets.Add(new StickerSetPanelItem(set.Field("id").Number(), set.Field("title").Text()));
                     var full = await telegram.RequestAsync(new { @type = "getStickerSet", set_id = set.Field("id").Number() }, lifetime.Token);
-                    stickers.AddRange(full.Field("stickers").Items().Take(24));
-                    if (stickers.Count >= 144) break;
+                    stickers.AddRange(full.Field("stickers").Items().Take(8));
+                    if (stickers.Count >= 96) break;
                 }
             }
             else
@@ -178,6 +281,10 @@ public partial class MainWindow
         MessageInput.Text = MessageInput.Text.Insert(start, emoji);
         MessageInput.SelectionStart = start + emoji.Length;
         MessageInput.Focus(FocusState.Programmatic);
+        preferences.RecentEmoji.Remove(emoji);
+        preferences.RecentEmoji.Insert(0, emoji);
+        if (preferences.RecentEmoji.Count > 40) preferences.RecentEmoji.RemoveRange(40, preferences.RecentEmoji.Count - 40);
+        SavePreferences();
     }
 
     private async Task<StickerPanelItem?> CreateStickerItemAsync(JsonElement sticker)
@@ -238,3 +345,5 @@ public partial class MainWindow
 }
 
 internal sealed record StickerPanelItem(int FileId, string RemoteId, string Emoji, int Width, int Height, ImageSource? Preview);
+internal sealed record StickerSetPanelItem(long Id, string Title);
+internal sealed record SharedMediaItem(MessageRow Message, ImageSource? Preview, string Title, string Link);

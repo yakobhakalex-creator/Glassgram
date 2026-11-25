@@ -25,11 +25,15 @@
 4. Не выдавать изменения Glassgram за код авторов Unigram.
 5. При распространении предоставить соответствующий исходный код и этот файл уведомлений.
 
-На 25 ноября 2026 года исходники Unigram в репозиторий Glassgram не переносились.
+Адаптация выполнена из commit `9354bcb753be3b16086bd3886b8adec062ccdd91` ветки `develop`; интерфейс Unigram целиком не переносился.
 
 | Компонент Unigram | Upstream commit и файл | Файл Glassgram | Изменения |
 | --- | --- | --- | --- |
-| Пока отсутствуют | — | — | — |
+| Каталог эмодзи | `Telegram/Common/Emoticon.cs` | `src/Glassgram/Telegram/UnigramEmojiCatalog.cs` | Изолированы данные категорий, добавлена русская локализация. |
+| Панель стикеров | `Telegram/ViewModels/Drawers/StickerDrawerViewModel.cs` | `src/Glassgram/MainWindow.SidePanel.cs` | Адаптированы источники TDLib: недавние, избранные, установленные наборы и поиск. |
+| Общие материалы | `Telegram/Collections/MediaCollection.cs` | `src/Glassgram/MainWindow.SidePanel.cs` | Адаптирована постраничная загрузка `searchChatMessages`. |
+| Профили | `Telegram/ViewModels/ProfileViewModel.cs` | `src/Glassgram/MainWindow.SidePanel.cs` | Адаптированы запросы пользователей, групп и каналов. |
+| Жизненный цикл стикеров | `Telegram/Controls/Messages/Content/StickerContent.xaml.cs`, `Telegram/Controls/AnimatedImage.cs` | `src/Glassgram/MainWindow.Media.cs` | Воспроизведение WEBM/TGS связано с видимостью во viewport. |
 
 ## Источники лицензий
 

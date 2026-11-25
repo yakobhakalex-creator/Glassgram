@@ -39,7 +39,7 @@ dotnet publish C:\Glassgram\src\Glassgram\Glassgram.csproj -c Release -r win-x64
 
 Сторонние библиотеки сохраняют собственные лицензии. Их перечень и результат проверки совместимости приведены в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Разрешено адаптировать GPL-3.0-код [Unigram](https://github.com/UnigramDev/Unigram). Каждый такой перенос должен сохранять исходное авторство и заголовок файла, содержать ссылку на исходный файл и commit upstream, дату и описание изменений Glassgram, а также отдельную запись в `THIRD_PARTY_NOTICES.md`. На момент этого изменения исходный код Unigram в Glassgram не переносился.
+Для панели эмодзи/стикеров, профилей, общих материалов и управления анимацией адаптированы отдельные GPL-3.0-компоненты [Unigram](https://github.com/UnigramDev/Unigram) из commit `9354bcb753be3b16086bd3886b8adec062ccdd91`. Авторство, исходные файлы и изменения перечислены в `THIRD_PARTY_NOTICES.md`; интерфейс Unigram не копируется.
 
 ## Подготовка к публикации
 

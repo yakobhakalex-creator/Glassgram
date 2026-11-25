@@ -447,6 +447,7 @@ public sealed class Preferences
     public string SendMode { get; set; } = "Enter";
     public bool MinimizeToTray { get; set; }
     public Dictionary<long, string> Drafts { get; set; } = [];
+    public List<string> RecentEmoji { get; set; } = [];
     public bool LiquidGlass { get; set; } = true;
     public string Wallpaper { get; set; } = "Windows";
     public bool AdaptiveWallpaper { get; set; } = true;
