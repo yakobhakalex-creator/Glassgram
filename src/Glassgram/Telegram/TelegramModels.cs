@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -68,6 +69,10 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
     public string Kind { get; private set; } = "";
     public long LastReadOutboxId { get; private set; }
     public int PhotoFileId { get; private set; }
+    public bool CanSendBasicMessages { get; private set; } = true;
+    public bool CanSendPhotos { get; private set; } = true;
+    public bool CanSendVideos { get; private set; } = true;
+    public bool CanSendDocuments { get; private set; } = true;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -82,6 +87,14 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
         LastReadOutboxId = chat.Field("last_read_outbox_message_id").Number();
         UserId = chat.Field("type").Field("@type").Text() == "chatTypePrivate" ? chat.Field("type").Field("user_id").Number() : 0;
         Kind = chat.Field("type").Field("@type").Text();
+        var permissions = chat.Field("permissions");
+        if (permissions.ValueKind == JsonValueKind.Object)
+        {
+            CanSendBasicMessages = permissions.Field("can_send_basic_messages").Flag();
+            CanSendPhotos = permissions.Field("can_send_photos").Flag();
+            CanSendVideos = permissions.Field("can_send_videos").Flag();
+            CanSendDocuments = permissions.Field("can_send_documents").Flag();
+        }
         Order = Math.Max(Order, chat.Field("last_message").Field("date").Number());
         foreach (var list in chat.Field("chat_lists").Items())
         {
@@ -124,6 +137,7 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
 
 internal sealed class MessageRow : INotifyPropertyChanged
 {
+    private static readonly Regex LinkPattern = new(@"https?://[^\s<>()]+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     public long Id { get; init; }
     public long ChatId { get; init; }
     public DateTime Date { get; init; }
@@ -134,6 +148,29 @@ internal sealed class MessageRow : INotifyPropertyChanged
     public bool Pending { get; init; }
     public bool Failed { get; init; }
     public bool IsDate { get; init; }
+    public string RawJson { get; init; } = "";
+    public string MediaKind { get; private set; } = "";
+    public string StickerFormat { get; private set; } = "";
+    public int PrimaryFileId { get; private set; }
+    public int PreviewFileId { get; private set; }
+    public string MediaPath { get; private set; } = "";
+    public string PreviewPath { get; private set; } = "";
+    public string FileName { get; private set; } = "";
+    public string MimeType { get; private set; } = "";
+    public long FileSize { get; private set; }
+    public double TransferProgress { get; private set; }
+    public string TransferText { get; private set; } = "";
+    public ImageSource? MediaPreview { get; private set; }
+    public string PrimaryLink => LinkPattern.Match(Text) is { Success: true } match ? match.Value : "";
+    public Visibility LinkVisibility => PrimaryLink.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility MediaVisibility => MediaKind.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ImageVisibility => MediaKind == "photo" || MediaKind == "animation" && !MimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) || MediaKind == "sticker" && StickerFormat == "stickerFormatWebp" ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility VideoVisibility => MediaKind == "video" ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility InlineVideoVisibility => MediaKind == "sticker" && StickerFormat == "stickerFormatWebm" || MediaKind == "animation" && MimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility TgsVisibility => MediaKind == "sticker" && StickerFormat == "stickerFormatTgs" ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility DocumentVisibility => MediaKind == "document" ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility TransferVisibility => TransferText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public string FileSizeText => FileSize <= 0 ? "" : FileSize < 1024 * 1024 ? $"{FileSize / 1024d:0.#} КБ" : $"{FileSize / 1024d / 1024d:0.#} МБ";
     public Visibility DateVisibility => IsDate ? Visibility.Visible : Visibility.Collapsed;
     public Visibility BubbleVisibility => IsDate ? Visibility.Collapsed : Visibility.Visible;
     public Visibility QuoteVisibility => Quote.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -152,7 +189,7 @@ internal sealed class MessageRow : INotifyPropertyChanged
             quote = TdJson.ContentText(reply.Field("content"));
         if (reply.ValueKind == JsonValueKind.Undefined || reply.ValueKind == JsonValueKind.Null) quote = "";
         var sender = message.Field("sender_id");
-        return new MessageRow
+        var row = new MessageRow
         {
             Id = message.Field("id").Number(),
             ChatId = message.Field("chat_id").Number(),
@@ -162,8 +199,115 @@ internal sealed class MessageRow : INotifyPropertyChanged
             Author = sender.Field("@type").Text() == "messageSenderChat" ? "Канал" : "",
             Outgoing = message.Field("is_outgoing").Flag(),
             Pending = message.Field("sending_state").Field("@type").Text() == "messageSendingStatePending",
-            Failed = message.Field("sending_state").Field("@type").Text() == "messageSendingStateFailed"
+            Failed = message.Field("sending_state").Field("@type").Text() == "messageSendingStateFailed",
+            RawJson = message.GetRawText()
         };
+        row.ReadMedia(message.Field("content"));
+        return row;
+    }
+
+    private void ReadMedia(JsonElement content)
+    {
+        var type = content.Field("@type").Text();
+        JsonElement primary = default;
+        JsonElement preview = default;
+        switch (type)
+        {
+            case "messagePhoto":
+                MediaKind = "photo";
+                var sizes = content.Field("photo").Field("sizes").Items().OrderBy(size => size.Field("width").Number() * size.Field("height").Number()).ToArray();
+                if (sizes.Length > 0)
+                {
+                    primary = sizes[^1].Field("photo");
+                    preview = sizes.FirstOrDefault(size => size.Field("width").Number() >= 320).Field("photo");
+                    if (preview.ValueKind == JsonValueKind.Undefined) preview = sizes[Math.Min(sizes.Length - 1, sizes.Length / 2)].Field("photo");
+                }
+                break;
+            case "messageAnimation":
+                MediaKind = "animation";
+                var animation = content.Field("animation");
+                primary = animation.Field("animation");
+                preview = animation.Field("thumbnail").Field("file");
+                FileName = animation.Field("file_name").Text();
+                MimeType = animation.Field("mime_type").Text();
+                break;
+            case "messageVideo":
+                MediaKind = "video";
+                var video = content.Field("video");
+                primary = video.Field("video");
+                preview = video.Field("thumbnail").Field("file");
+                FileName = video.Field("file_name").Text();
+                MimeType = video.Field("mime_type").Text();
+                break;
+            case "messageSticker":
+                MediaKind = "sticker";
+                var sticker = content.Field("sticker");
+                primary = sticker.Field("sticker");
+                preview = sticker.Field("thumbnail").Field("file");
+                StickerFormat = sticker.Field("format").Field("@type").Text();
+                FileName = sticker.Field("emoji").Text() + " sticker";
+                break;
+            case "messageDocument":
+                MediaKind = "document";
+                var document = content.Field("document");
+                primary = document.Field("document");
+                preview = document.Field("thumbnail").Field("file");
+                FileName = document.Field("file_name").Text();
+                MimeType = document.Field("mime_type").Text();
+                break;
+        }
+        ApplyInitialFile(primary, true);
+        ApplyInitialFile(preview, false);
+    }
+
+    private void ApplyInitialFile(JsonElement file, bool primary)
+    {
+        if (file.ValueKind != JsonValueKind.Object) return;
+        var id = (int)file.Field("id").Number();
+        if (primary)
+        {
+            PrimaryFileId = id;
+            FileSize = file.Field("size").Number();
+            MediaPath = file.Field("local").Field("path").Text();
+        }
+        else
+        {
+            PreviewFileId = id;
+            PreviewPath = file.Field("local").Field("path").Text();
+        }
+        RefreshMediaPreview();
+    }
+
+    public void ApplyFile(JsonElement file)
+    {
+        var id = (int)file.Field("id").Number();
+        var local = file.Field("local");
+        var path = local.Field("path").Text();
+        if (id == PrimaryFileId && path.Length > 0) MediaPath = path;
+        if (id == PreviewFileId && path.Length > 0) PreviewPath = path;
+        if (id == PrimaryFileId)
+        {
+            var expected = Math.Max(1, file.Field("expected_size").Number());
+            var downloaded = local.Field("downloaded_size").Number();
+            TransferProgress = Math.Clamp(downloaded * 100d / expected, 0, 100);
+            TransferText = local.Field("is_downloading_active").Flag() ? $"Загрузка {TransferProgress:0}%" : "";
+        }
+        RefreshMediaPreview();
+        RaiseMedia();
+    }
+
+    private void RefreshMediaPreview()
+    {
+        var path = PreviewPath.Length > 0 ? PreviewPath : MediaKind is "photo" or "animation" || StickerFormat == "stickerFormatWebp" ? MediaPath : "";
+        if (path.Length == 0 || !File.Exists(path)) return;
+        try { MediaPreview = new BitmapImage(new Uri(path)); }
+        catch (UriFormatException) { }
+    }
+
+    private void RaiseMedia()
+    {
+        foreach (var name in new[] { nameof(MediaPreview), nameof(MediaPath), nameof(PreviewPath), nameof(TransferProgress), nameof(TransferText), nameof(TransferVisibility), nameof(FileSizeText) })
+            PropertyChanged?.Invoke(this, new(name));
     }
 
     public void UpdateAppearance(bool light, long lastReadOutbox)

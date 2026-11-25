@@ -12,7 +12,15 @@ public partial class App : Application
 
     public App() => InitializeComponent();
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args) => LaunchWindow();
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    {
+        try { LaunchWindow(); }
+        catch (Exception exception)
+        {
+            ReportStartupFailure(exception);
+            throw;
+        }
+    }
 
     private void LaunchWindow()
     {
@@ -45,5 +53,16 @@ public partial class App : Application
         if (value is null || !long.TryParse(value[7..], out var chatId)) return;
         notificationChatId = chatId;
         window?.DispatcherQueue.TryEnqueue(() => _ = window.OpenChatFromNotificationAsync(chatId));
+    }
+
+    private static void ReportStartupFailure(Exception exception)
+    {
+        try
+        {
+            var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Glassgram");
+            Directory.CreateDirectory(root);
+            File.WriteAllText(Path.Combine(root, "startup-error.txt"), exception.GetType().FullName + Environment.NewLine + exception.Message + Environment.NewLine + exception.StackTrace);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 }

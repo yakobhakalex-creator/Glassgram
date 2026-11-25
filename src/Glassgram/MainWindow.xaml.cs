@@ -38,6 +38,7 @@ public partial class MainWindow : Window
             SettingsStatus.Text = "Не удалось прочитать настройки. " + ex.Message;
         }
         Closed += (_, _) => { lifetime.Cancel(); http.Dispose(); };
+        InitializeMedia();
         InitializeTelegram();
     }
 

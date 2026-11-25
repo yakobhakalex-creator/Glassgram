@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Glassgram.Telegram;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 
@@ -126,6 +127,7 @@ public partial class MainWindow
         if (!histories.TryGetValue(chatId, out var history)) return;
         foreach (var id in update.Field("message_ids").Items()) history.Messages.Remove(id.Number());
         if (activeChat?.Id == chatId) RenderHistory(chatId);
+        _ = SaveHistoryCacheAsync(chatId, history);
     }
 
     private void UpdateAvatar(JsonElement file)
@@ -133,6 +135,8 @@ public partial class MainWindow
         var id = (int)file.Field("id").Number();
         if (avatarFiles.TryGetValue(id, out var chatId) && knownChats.TryGetValue(chatId, out var chat))
             chat.SetAvatar(file.Field("local").Field("path").Text());
+        if (mediaFiles.TryGetValue(id, out var messages))
+            foreach (var message in messages.ToArray()) message.ApplyFile(file);
     }
 
     private async Task LoadUserStatusAsync(long userId)
@@ -243,6 +247,60 @@ public partial class MainWindow
         MessageInput.Focus(FocusState.Programmatic);
     }
 
+    private void ContextReply(object sender, RoutedEventArgs args)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not MessageRow row || row.IsDate) return;
+        selectedMessage = row;
+        MessageList.SelectedItem = row;
+        ReplyToMessage(sender, args);
+    }
+
+    private void MessageContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (args.ItemContainer is not ListViewItem item) return;
+        item.RightTapped -= ShowMessageContextMenu;
+        item.RightTapped += ShowMessageContextMenu;
+    }
+
+    private void ShowMessageContextMenu(object sender, RightTappedRoutedEventArgs args)
+    {
+        if (sender is not ListViewItem target || target.Content is not MessageRow row || row.IsDate) return;
+        var menu = new MenuFlyout();
+        var reply = new MenuFlyoutItem { Text = "Ответить", DataContext = row };
+        var edit = new MenuFlyoutItem { Text = "Изменить", DataContext = row };
+        var delete = new MenuFlyoutItem { Text = "Удалить", DataContext = row };
+        reply.Click += ContextReply;
+        edit.Click += ContextEdit;
+        delete.Click += ContextDelete;
+        menu.Items.Add(reply);
+        menu.Items.Add(edit);
+        menu.Items.Add(delete);
+        menu.ShowAt(target);
+        args.Handled = true;
+    }
+
+    private async void ContextEdit(object sender, RoutedEventArgs args)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not MessageRow row || row.IsDate || telegram is null || activeChat is null) return;
+        try
+        {
+            var properties = await telegram.RequestAsync(new { @type = "getMessageProperties", chat_id = activeChat.Id, message_id = row.Id }, lifetime.Token);
+            if (!properties.Field("can_be_edited").Flag()) return;
+            selectedMessage = row;
+            MessageList.SelectedItem = row;
+            EditSelectedMessage(sender, args);
+        }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException) { }
+    }
+
+    private void ContextDelete(object sender, RoutedEventArgs args)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not MessageRow row || row.IsDate) return;
+        selectedMessage = row;
+        MessageList.SelectedItem = row;
+        DeleteSelectedMessage(sender, args);
+    }
+
     private void EditSelectedMessage(object sender, RoutedEventArgs args)
     {
         if (selectedMessage is null) return;
@@ -340,6 +398,7 @@ public partial class MainWindow
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
             await telegram.RequestAsync(new { @type = "deleteMessages", chat_id = chatId, message_ids = new[] { messageId }, revoke }, lifetime.Token);
             if (histories.TryGetValue(chatId, out var history)) history.Messages.Remove(messageId);
+            if (histories.TryGetValue(chatId, out history)) _ = SaveHistoryCacheAsync(chatId, history);
             if (activeChat?.Id == chatId) RenderHistory(chatId);
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException)

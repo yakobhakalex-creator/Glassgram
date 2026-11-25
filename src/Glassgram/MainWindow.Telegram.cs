@@ -124,7 +124,7 @@ public partial class MainWindow
                         ["system_language_code"] = "ru",
                         ["device_model"] = "Windows PC",
                         ["system_version"] = Environment.OSVersion.VersionString,
-                        ["application_version"] = "Glassgram 0.2"
+                        ["application_version"] = "Glassgram 0.3.1"
                     }, lifetime.Token);
                 }
                 catch (Exception ex)

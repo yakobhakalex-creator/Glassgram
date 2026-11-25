@@ -11,6 +11,8 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\Glassgram.ico</ApplicationIcon>
+    <Version>0.3.1</Version>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -19,5 +21,17 @@
     <PackageReference Include="tdlib.native.win-x64" Version="1.8.67" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="11.0.0" />
+    <PackageReference Include="CommunityToolkit.WinUI.Lottie" Version="8.2.250604" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.241114003" ExcludeAssets="build;buildTransitive;runtime;native;contentfiles;analyzers" PrivateAssets="all" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="Assets\Glassgram.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="CopyWinUIResourcesToPublishDirectory" AfterTargets="Publish">
+    <ItemGroup>
+      <WinUIResource Include="$(TargetDir)*.xbf" />
+      <WinUIResource Include="$(TargetDir)$(AssemblyName).pri" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WinUIResource)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

@@ -10,6 +10,7 @@ namespace Glassgram;
 
 public partial class MainWindow
 {
+    private const int InitialHistoryLimit = 500;
     private readonly Dictionary<long, ChatRow> knownChats = [];
     private readonly ObservableCollection<ChatRow> visibleChats = [];
     private readonly ObservableCollection<MessageRow> visibleMessages = [];
@@ -17,6 +18,7 @@ public partial class MainWindow
     private readonly Dictionary<long, double> scrollPositions = [];
     private readonly Dictionary<long, int> historyDepths = [];
     private readonly Dictionary<int, long> avatarFiles = [];
+    private readonly Dictionary<int, HashSet<MessageRow>> mediaFiles = [];
     private readonly Dictionary<long, string> userStatuses = [];
     private readonly Dictionary<long, long> lastMarkedRead = [];
     private ScrollViewer? messageScroller;
@@ -69,6 +71,7 @@ public partial class MainWindow
         scrollPositions.Clear();
         historyDepths.Clear();
         avatarFiles.Clear();
+        mediaFiles.Clear();
         lastMarkedRead.Clear();
         MessageActions.Visibility = Visibility.Collapsed;
         ConversationPage.Visibility = Visibility.Collapsed;
@@ -140,6 +143,7 @@ public partial class MainWindow
             activeChat = row;
             ActiveChatTitle.Text = row.Title;
             UpdateActiveStatus();
+            UpdateComposerAvailability();
             RefreshReadMarks();
         }
     }
@@ -208,6 +212,7 @@ public partial class MainWindow
             EmptyChat.Visibility = Visibility.Collapsed;
             ConversationPage.Visibility = Visibility.Visible;
             ActiveChatTitle.Text = chat.Title;
+            UpdateComposerAvailability();
             MessageInput.Text = "";
             CancelMessageAction(null!, null!);
             UpdateActiveStatus();
@@ -221,13 +226,13 @@ public partial class MainWindow
                 historyRestores++;
                 try
                 {
-                    await LoadHistoryAsync(chatId, history, initial: true);
+                    await InitializeHistoryAsync(chatId, history, version);
                     if (historyDepths.TryGetValue(chatId, out var depth))
                     {
                         while (version == chatOpenVersion && activeChat?.Id == chatId && history.HasMore && history.Messages.Count < depth)
                         {
                             var before = history.Messages.Count;
-                            await LoadHistoryAsync(chatId, history);
+                            await LoadOlderHistoryAsync(chatId, history);
                             if (history.Messages.Count == before) break;
                         }
                     }
@@ -252,43 +257,135 @@ public partial class MainWindow
         }
     }
 
-    private async Task LoadHistoryAsync(long chatId, ChatHistory history, bool initial = false)
+    private async Task InitializeHistoryAsync(long chatId, ChatHistory history, long openVersion)
     {
-        if (history.Loading || !history.HasMore || history.Messages.Count >= 500 || telegram is null) return;
+        if (history.Loading || telegram is null) return;
         history.Loading = true;
-        var oldHeight = messageScroller?.ExtentHeight ?? 0;
-        var oldOffset = messageScroller?.VerticalOffset ?? 0;
+        SetHistoryLoading(chatId, true, "Загружаем историю…");
         try
         {
-            var result = await telegram.RequestAsync(new
-            {
-                @type = "getChatHistory", chat_id = chatId, from_message_id = initial ? 0 : history.OldestId,
-                offset = 0, limit = initial ? 40 : Math.Min(100, 500 - history.Messages.Count), only_local = false
-            }, lifetime.Token);
-            var received = result.Field("messages").Items().ToArray();
-            var newCount = 0;
-            foreach (var message in received)
-            {
-                var row = MessageRow.FromJson(message);
-                if (row.Id != 0 && history.Messages.TryAdd(row.Id, row)) newCount++;
-            }
-            history.OldestId = history.Messages.Count == 0 ? 0 : history.Messages.Keys.Min();
-            if (received.Length == 0 || (!initial && newCount == 0) || history.Messages.Count >= 500) history.HasMore = false;
-            history.LastUsed = DateTime.UtcNow;
-            if (activeChat?.Id == chatId)
+            var cached = await MessageHistoryCache.LoadAsync(chatId, lifetime.Token);
+            foreach (var row in cached) history.Messages.TryAdd(row.Id, row);
+            UpdateOldestMessage(history);
+            if (activeChat?.Id == chatId && history.Messages.Count > 0)
             {
                 RenderHistory(chatId);
-                MessageList.UpdateLayout();
-                if (initial) messageScroller?.ChangeView(null, messageScroller.ScrollableHeight, null, true);
-                else messageScroller?.ChangeView(null, oldOffset + (messageScroller.ExtentHeight - oldHeight), null, true);
-                if (initial) await MarkReadAsync();
+                await ScrollToLatestAsync(chatId);
             }
+
+            await FetchHistoryPageAsync(chatId, history, 0);
+            while (history.HasMore && history.Messages.Count < InitialHistoryLimit)
+            {
+                var before = history.Messages.Count;
+                await FetchHistoryPageAsync(chatId, history, history.OldestId);
+                if (history.Messages.Count == before) break;
+            }
+            TrimToLatest(history, InitialHistoryLimit);
+            history.LastUsed = DateTime.UtcNow;
+            if (openVersion == chatOpenVersion && activeChat?.Id == chatId)
+            {
+                RenderHistory(chatId);
+                await ScrollToLatestAsync(chatId);
+                await MarkReadAsync();
+            }
+            _ = SaveHistoryCacheAsync(chatId, history);
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException or JsonException)
         {
             if (activeChat?.Id == chatId && !lifetime.IsCancellationRequested) MessengerStatus.Text = "История не загрузилась. " + ex.Message;
         }
-        finally { history.Loading = false; }
+        finally
+        {
+            history.Loading = false;
+            SetHistoryLoading(chatId, false);
+        }
+    }
+
+    private async Task LoadOlderHistoryAsync(long chatId, ChatHistory history)
+    {
+        if (history.Loading || !history.HasMore || telegram is null || history.OldestId == 0) return;
+        history.Loading = true;
+        SetHistoryLoading(chatId, true, "Загружаем старые сообщения…");
+        var oldHeight = messageScroller?.ExtentHeight ?? 0;
+        var oldOffset = messageScroller?.VerticalOffset ?? 0;
+        try
+        {
+            await FetchHistoryPageAsync(chatId, history, history.OldestId);
+            history.LastUsed = DateTime.UtcNow;
+            if (activeChat?.Id == chatId)
+            {
+                RenderHistory(chatId);
+                MessageList.UpdateLayout();
+                messageScroller?.ChangeView(null, oldOffset + (messageScroller.ExtentHeight - oldHeight), null, true);
+            }
+            _ = SaveHistoryCacheAsync(chatId, history);
+        }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or JsonException)
+        {
+            if (activeChat?.Id == chatId && !lifetime.IsCancellationRequested) MessengerStatus.Text = "История не загрузилась. " + ex.Message;
+        }
+        finally
+        {
+            history.Loading = false;
+            SetHistoryLoading(chatId, false);
+        }
+    }
+
+    private async Task<int> FetchHistoryPageAsync(long chatId, ChatHistory history, long fromMessageId)
+    {
+        if (telegram is null) return 0;
+        var result = await telegram.RequestAsync(new
+        {
+            @type = "getChatHistory", chat_id = chatId, from_message_id = fromMessageId,
+            offset = 0, limit = 100, only_local = false
+        }, lifetime.Token);
+        var received = result.Field("messages").Items().ToArray();
+        var added = 0;
+        foreach (var message in received)
+        {
+            var row = MessageRow.FromJson(message);
+            if (row.Id != 0 && history.Messages.TryAdd(row.Id, row)) added++;
+        }
+        UpdateOldestMessage(history);
+        if (received.Length == 0 || (fromMessageId != 0 && added == 0)) history.HasMore = false;
+        return added;
+    }
+
+    private static void UpdateOldestMessage(ChatHistory history) =>
+        history.OldestId = history.Messages.Count == 0 ? 0 : history.Messages.Keys.Min();
+
+    private static void TrimToLatest(ChatHistory history, int limit)
+    {
+        if (history.Messages.Count <= limit) return;
+        foreach (var id in history.Messages.Values.OrderByDescending(message => message.Date).ThenByDescending(message => message.Id).Skip(limit).Select(message => message.Id).ToArray())
+            history.Messages.Remove(id);
+        UpdateOldestMessage(history);
+    }
+
+    private async Task ScrollToLatestAsync(long chatId)
+    {
+        if (activeChat?.Id != chatId || visibleMessages.Count == 0) return;
+        var last = visibleMessages[^1];
+        MessageList.ScrollIntoView(last);
+        await Task.Delay(60, lifetime.Token);
+        if (activeChat?.Id != chatId) return;
+        MessageList.UpdateLayout();
+        MessageList.ScrollIntoView(last);
+        messageScroller?.ChangeView(null, double.MaxValue, null, true);
+    }
+
+    private async Task SaveHistoryCacheAsync(long chatId, ChatHistory history)
+    {
+        try { await MessageHistoryCache.SaveAsync(chatId, history.Messages.Values.ToArray(), lifetime.Token); }
+        catch (OperationCanceledException) { }
+    }
+
+    private void SetHistoryLoading(long chatId, bool visible, string text = "")
+    {
+        if (activeChat?.Id != chatId) return;
+        HistoryLoadingText.Text = text;
+        HistoryLoadingPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        HistoryLoadingRing.IsActive = visible;
     }
 
     private void RenderHistory(long chatId)
@@ -299,6 +396,7 @@ public partial class MainWindow
         var lastRead = knownChats.TryGetValue(chatId, out var chat) ? chat.LastReadOutboxId : 0;
         foreach (var row in history.Messages.Values.OrderBy(m => m.Date).ThenBy(m => m.Id))
         {
+            RegisterMessageFiles(row);
             if (lastDay != row.Date.Date)
             {
                 visibleMessages.Add(new MessageRow { IsDate = true, Date = row.Date });
@@ -306,6 +404,15 @@ public partial class MainWindow
             }
             row.UpdateAppearance(lightTheme, lastRead);
             visibleMessages.Add(row);
+        }
+    }
+
+    private void RegisterMessageFiles(MessageRow row)
+    {
+        foreach (var fileId in new[] { row.PrimaryFileId, row.PreviewFileId }.Where(id => id != 0))
+        {
+            if (!mediaFiles.TryGetValue(fileId, out var rows)) mediaFiles[fileId] = rows = [];
+            rows.Add(row);
         }
     }
 
@@ -335,11 +442,23 @@ public partial class MainWindow
 
     private void TrimHistoryCache()
     {
+        var changed = false;
+        foreach (var cached in histories.Where(h => h.Key != activeChat?.Id && h.Value.Messages.Count > InitialHistoryLimit))
+        {
+            historyDepths[cached.Key] = Math.Max(historyDepths.GetValueOrDefault(cached.Key), cached.Value.Messages.Count);
+            TrimToLatest(cached.Value, InitialHistoryLimit);
+            changed = true;
+        }
         foreach (var old in histories.Where(h => h.Key != activeChat?.Id).OrderByDescending(h => h.Value.LastUsed).Skip(4).ToArray())
         {
             historyDepths[old.Key] = old.Value.Messages.Count;
             histories.Remove(old.Key);
+            changed = true;
         }
+        if (!changed) return;
+        mediaFiles.Clear();
+        foreach (var history in histories.Values)
+            foreach (var message in history.Messages.Values) RegisterMessageFiles(message);
     }
 
     private static ScrollViewer? FindScrollViewer(DependencyObject root)
@@ -357,14 +476,17 @@ public partial class MainWindow
     {
         messageScroller = FindScrollViewer(MessageList);
         if (messageScroller is not null) messageScroller.ViewChanged += MessageScrollChanged;
+        MessageList.ContainerContentChanging -= MessageContainerChanging;
+        MessageList.ContainerContentChanging += MessageContainerChanging;
     }
 
     private async void MessageScrollChanged(object? sender, ScrollViewerViewChangedEventArgs args)
     {
         if (historyRestores > 0 || activeChat is null || messageScroller is null || !histories.TryGetValue(activeChat.Id, out var history)) return;
         scrollPositions[activeChat.Id] = messageScroller.VerticalOffset;
+        JumpToLatestButton.Visibility = messageScroller.VerticalOffset < messageScroller.ScrollableHeight - 240 ? Visibility.Visible : Visibility.Collapsed;
         if (messageScroller.VerticalOffset < 80 && history.HasMore && !history.Loading)
-            await LoadHistoryAsync(activeChat.Id, history);
+            await LoadOlderHistoryAsync(activeChat.Id, history);
         if (messageScroller.VerticalOffset >= messageScroller.ScrollableHeight - 80)
             await MarkReadAsync();
     }
@@ -406,4 +528,10 @@ public partial class MainWindow
     }
 
     private void ResizeChatCaptureLost(object sender, PointerRoutedEventArgs args) => resizingChats = false;
+
+    private void UpdateComposerAvailability()
+    {
+        if (activeChat is null) return;
+        ComposerPanel.Visibility = activeChat.CanSendBasicMessages ? Visibility.Visible : Visibility.Collapsed;
+    }
 }
