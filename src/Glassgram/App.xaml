@@ -26,8 +26,8 @@
     </Style>
     <Style TargetType="controls:GlassPanel">
       <Setter Property="CornerRadius" Value="28"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="BorderBrush" Value="#72FFFFFF"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="controls:GlassPanel">
           <Grid>

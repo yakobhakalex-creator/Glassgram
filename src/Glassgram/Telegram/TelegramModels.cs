@@ -190,7 +190,7 @@ internal sealed class MessageRow : INotifyPropertyChanged
     public bool GroupedWithPrevious { get; set; }
     public Visibility AvatarVisibility => !Outgoing && !GroupedWithPrevious ? Visibility.Visible : Visibility.Collapsed;
     public Visibility AuthorVisibility => Author.Length > 0 && !GroupedWithPrevious ? Visibility.Visible : Visibility.Collapsed;
-    public Thickness RowMargin => new(Outgoing ? 28 : 0, GroupedWithPrevious ? 1 : 5, Outgoing ? 0 : 20, 0);
+    public Thickness RowMargin => new(Outgoing ? 18 : 0, GroupedWithPrevious ? 1 : 5, Outgoing ? 0 : 12, 0);
     public CornerRadius BubbleCornerRadius => Outgoing
         ? new(18, 18, GroupedWithPrevious ? 18 : 5, 18)
         : new(18, 18, 18, GroupedWithPrevious ? 18 : 5);

@@ -71,7 +71,7 @@
         </Grid>
         <Grid x:Name="ChatsPage" ColumnSpacing="0">
           <Grid.ColumnDefinitions><ColumnDefinition x:Name="ChatColumn" Width="340" MinWidth="250"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-          <controls:GlassPanel x:Name="ChatListPanel" CornerRadius="28" BorderBrush="#66FFFFFF" BorderThickness="1" Padding="10" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+          <controls:GlassPanel x:Name="ChatListPanel" CornerRadius="28" BorderBrush="Transparent" BorderThickness="0" Padding="10" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
             <Grid RowSpacing="8"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
               <TextBlock Text="Чаты" FontSize="25" FontWeight="SemiBold" Margin="10,5,8,0"/>
               <TextBox x:Name="ChatSearch" Grid.Row="1" PlaceholderText="Поиск в Glassgram" TextChanged="SearchChats"/>
@@ -100,8 +100,8 @@
             </Grid>
           </controls:GlassPanel>
           <Grid Grid.Column="1" Background="Transparent" PointerPressed="ResizeChatPressed" PointerMoved="ResizeChatMoved" PointerReleased="ResizeChatReleased" PointerCaptureLost="ResizeChatCaptureLost" ToolTipService.ToolTip="Изменить ширину списка чатов"><Border Width="1" Background="#28FFFFFF" HorizontalAlignment="Center" Margin="0,22"/></Grid>
-          <controls:GlassPanel x:Name="MessagesPanel" Grid.Column="2" CornerRadius="28" BorderBrush="#72FFFFFF" BorderThickness="1">
-            <Grid>
+          <controls:GlassPanel x:Name="MessagesPanel" Grid.Column="2" CornerRadius="28" BorderBrush="Transparent" BorderThickness="0">
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="FutureSidePanelColumn" Width="0" MinWidth="0" MaxWidth="340"/></Grid.ColumnDefinitions>
             <Grid x:Name="EmptyChat" Padding="48">
               <StackPanel VerticalAlignment="Center" MaxWidth="440" Spacing="18">
                 <FontIcon Glyph="&#xE8F2;" FontSize="54" Foreground="#9FD8F5" HorizontalAlignment="Left"/>
@@ -110,8 +110,8 @@
               </StackPanel>
             </Grid>
             <Grid x:Name="ConversationPage" Visibility="Collapsed" RowSpacing="0">
-              <Grid.RowDefinitions><RowDefinition Height="68"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-              <controls:GlassPanel x:Name="ConversationHeader" BorderBrush="#58FFFFFF" BorderThickness="0,0,0,1" Padding="12,7" Margin="4,4,4,0" CornerRadius="24,24,8,8" HorizontalAlignment="Stretch">
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+              <controls:GlassPanel x:Name="ConversationHeader" BorderBrush="Transparent" BorderThickness="0" Padding="12,7" Margin="4,4,4,2" CornerRadius="24,24,8,8" HorizontalAlignment="Stretch">
                 <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="46"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                   <Grid Width="42" Height="42"><Ellipse Fill="#567F99"/><TextBlock x:Name="ActiveChatAvatarLetter" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/><Ellipse><Ellipse.Fill><ImageBrush x:Name="ActiveChatAvatarBrush" Stretch="UniformToFill"/></Ellipse.Fill></Ellipse></Grid>
                   <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2"><TextBlock x:Name="ActiveChatTitle" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="ActiveChatStatus" FontSize="12" Opacity="0.72" TextTrimming="CharacterEllipsis"/></StackPanel>
@@ -127,7 +127,7 @@
                     </Border>
                     <Grid Visibility="{Binding BubbleVisibility}" HorizontalAlignment="{Binding Alignment}"><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <Grid Width="24" Height="24" VerticalAlignment="Bottom" Margin="0,0,4,1" Visibility="{Binding AvatarVisibility}"><Ellipse Fill="#547F99"/><TextBlock Text="{Binding SenderInitial}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="10" FontWeight="SemiBold"/><Ellipse><Ellipse.Fill><ImageBrush ImageSource="{Binding SenderAvatar}" Stretch="UniformToFill"/></Ellipse.Fill></Ellipse></Grid>
-                    <Border Grid.Column="1" Background="{Binding BubbleBrush}" BorderBrush="{Binding BubbleBorderBrush}" BorderThickness="1" CornerRadius="{Binding BubbleCornerRadius}" Padding="9,5" MinWidth="54">
+                    <Border Grid.Column="1" Background="{Binding BubbleBrush}" BorderBrush="Transparent" BorderThickness="0" CornerRadius="{Binding BubbleCornerRadius}" Padding="9,5" MinWidth="54">
                       <StackPanel Spacing="3">
                         <TextBlock Text="{Binding Author}" Visibility="{Binding AuthorVisibility}" Foreground="#9EDBFA" FontWeight="SemiBold" FontSize="11"/>
                         <Border Visibility="{Binding QuoteVisibility}" Background="#2689BFE0" BorderBrush="#89CDEB" BorderThickness="3,0,0,0" Padding="8,4" CornerRadius="4">
@@ -181,7 +181,7 @@
                 <Button x:Name="DeleteButton" Grid.Column="2" Content="Удалить" Click="DeleteSelectedMessage"/>
                 <Button x:Name="ForwardButton" Grid.Column="3" Content="Переслать" Click="ForwardSelectedMessages"/>
               </Grid>
-              <Grid x:Name="ComposerPanel" Grid.Row="3" Padding="8,6" Margin="6,4,6,6" CornerRadius="20" RowSpacing="5" ColumnSpacing="7" BorderBrush="#70FFFFFF" BorderThickness="1" HorizontalAlignment="Stretch">
+              <Grid x:Name="ComposerPanel" Grid.Row="3" Padding="8,6" Margin="6,4,6,6" CornerRadius="20" RowSpacing="5" ColumnSpacing="7" BorderBrush="Transparent" BorderThickness="0" HorizontalAlignment="Stretch">
                 <Grid.Background><AcrylicBrush TintColor="#36566F" TintOpacity="0.76" TintLuminosityOpacity="0.34" FallbackColor="#F0223342"/></Grid.Background>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -195,6 +195,7 @@
                 <TextBlock x:Name="MessengerStatus" Grid.Row="2" Grid.ColumnSpan="3" FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
               </Grid>
             </Grid>
+            <Grid x:Name="FutureSidePanel" Grid.Column="1" Visibility="Collapsed" MinWidth="280" MaxWidth="340"/>
             </Grid>
           </controls:GlassPanel>
         </Grid>

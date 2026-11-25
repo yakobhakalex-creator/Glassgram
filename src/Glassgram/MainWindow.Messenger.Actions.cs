@@ -303,6 +303,8 @@ public partial class MainWindow
     private void MessageContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
         if (args.ItemContainer is not ListViewItem item) return;
+        item.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        item.Padding = new Thickness(0);
         item.RightTapped -= ShowMessageContextMenu;
         item.RightTapped += ShowMessageContextMenu;
     }
