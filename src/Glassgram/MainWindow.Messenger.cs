@@ -254,6 +254,8 @@ public partial class MainWindow
             EmptyChat.Visibility = Visibility.Collapsed;
             ConversationPage.Visibility = Visibility.Visible;
             ActiveChatTitle.Text = chat.Title;
+            ActiveChatAvatarLetter.Text = chat.AvatarLetter;
+            ActiveChatAvatarBrush.ImageSource = chat.Avatar;
             UpdateComposerAvailability();
             suppressDraftSave = true;
             MessageInput.Text = preferences.Drafts.GetValueOrDefault(chat.Id, "");
@@ -444,6 +446,7 @@ public partial class MainWindow
         DateTime? lastDay = null;
         var lastRead = knownChats.TryGetValue(chatId, out var chat) ? chat.LastReadOutboxId : 0;
         var query = MessageSearch.Text.Trim();
+        MessageRow? previous = null;
         foreach (var row in history.Messages.Values.OrderBy(m => m.Date).ThenBy(m => m.Id).Where(m => query.Length == 0 || m.Text.Contains(query, StringComparison.CurrentCultureIgnoreCase)))
         {
             RegisterMessageFiles(row);
@@ -453,7 +456,14 @@ public partial class MainWindow
                 lastDay = row.Date.Date;
             }
             row.UpdateAppearance(lightTheme, lastRead);
+            row.GroupedWithPrevious = previous is not null && previous.Outgoing == row.Outgoing && previous.Author == row.Author && row.Date - previous.Date < TimeSpan.FromMinutes(5);
+            if (!row.Outgoing && chat is not null)
+            {
+                row.SenderAvatar = chat.Avatar;
+                row.SenderInitial = chat.AvatarLetter;
+            }
             visibleMessages.Add(row);
+            previous = row;
         }
     }
 
@@ -578,6 +588,13 @@ public partial class MainWindow
     }
 
     private void ResizeChatCaptureLost(object sender, PointerRoutedEventArgs args) => resizingChats = false;
+
+    private void ToggleMessageSearch(object sender, RoutedEventArgs args)
+    {
+        MessageSearch.Visibility = MessageSearch.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+        if (MessageSearch.Visibility == Visibility.Visible) MessageSearch.Focus(FocusState.Programmatic);
+        else if (MessageSearch.Text.Length > 0) MessageSearch.Text = "";
+    }
 
     private void UpdateComposerAvailability()
     {

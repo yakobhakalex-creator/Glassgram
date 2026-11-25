@@ -185,6 +185,15 @@ internal sealed class MessageRow : INotifyPropertyChanged
     public bool IsDownloadingActive { get; private set; }
     public bool CanBeDownloaded { get; private set; } = true;
     public ImageSource? MediaPreview { get; private set; }
+    public ImageSource? SenderAvatar { get; set; }
+    public string SenderInitial { get; set; } = "•";
+    public bool GroupedWithPrevious { get; set; }
+    public Visibility AvatarVisibility => !Outgoing && !GroupedWithPrevious ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility AuthorVisibility => Author.Length > 0 && !GroupedWithPrevious ? Visibility.Visible : Visibility.Collapsed;
+    public Thickness RowMargin => new(Outgoing ? 72 : 0, GroupedWithPrevious ? 1 : 7, Outgoing ? 0 : 56, 0);
+    public CornerRadius BubbleCornerRadius => Outgoing
+        ? new(18, 18, GroupedWithPrevious ? 18 : 5, 18)
+        : new(18, 18, 18, GroupedWithPrevious ? 18 : 5);
     public string PrimaryLink => LinkPattern.Match(Text) is { Success: true } match ? match.Value : "";
     public Visibility LinkVisibility => PrimaryLink.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     public Visibility MediaVisibility => MediaKind.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -203,6 +212,7 @@ internal sealed class MessageRow : INotifyPropertyChanged
     public string DayText => Date.ToString("d MMMM yyyy");
     public string Status { get; private set; } = "";
     public Brush BubbleBrush { get; private set; } = new SolidColorBrush(Windows.UI.Color.FromArgb(190, 48, 65, 82));
+    public Brush BubbleBorderBrush { get; private set; } = new SolidColorBrush(Windows.UI.Color.FromArgb(50, 255, 255, 255));
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public static MessageRow FromJson(JsonElement message)
@@ -365,7 +375,9 @@ internal sealed class MessageRow : INotifyPropertyChanged
             ? light ? Windows.UI.Color.FromArgb(230, 195, 226, 245) : Windows.UI.Color.FromArgb(210, 43, 101, 132)
             : light ? Windows.UI.Color.FromArgb(240, 255, 255, 255) : Windows.UI.Color.FromArgb(185, 52, 68, 84);
         BubbleBrush = new SolidColorBrush(color);
+        BubbleBorderBrush = new SolidColorBrush(light ? Windows.UI.Color.FromArgb(42, 20, 70, 100) : Windows.UI.Color.FromArgb(58, 255, 255, 255));
         PropertyChanged?.Invoke(this, new(nameof(Status)));
         PropertyChanged?.Invoke(this, new(nameof(BubbleBrush)));
+        PropertyChanged?.Invoke(this, new(nameof(BubbleBorderBrush)));
     }
 }

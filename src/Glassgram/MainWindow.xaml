@@ -99,8 +99,8 @@
               </ListView>
             </Grid>
           </controls:GlassPanel>
-          <Border Grid.Column="1" Background="Transparent" PointerPressed="ResizeChatPressed" PointerMoved="ResizeChatMoved" PointerReleased="ResizeChatReleased" PointerCaptureLost="ResizeChatCaptureLost"/>
-          <controls:GlassPanel x:Name="MessagesPanel" Grid.Column="2" CornerRadius="28" BorderBrush="#62FFFFFF" BorderThickness="1">
+          <Grid Grid.Column="1" Background="Transparent" PointerPressed="ResizeChatPressed" PointerMoved="ResizeChatMoved" PointerReleased="ResizeChatReleased" PointerCaptureLost="ResizeChatCaptureLost" ToolTipService.ToolTip="Изменить ширину списка чатов"><Border Width="3" CornerRadius="2" Background="#55CBEFFF" HorizontalAlignment="Center" Margin="0,18"/></Grid>
+          <controls:GlassPanel x:Name="MessagesPanel" Grid.Column="2" CornerRadius="28" BorderBrush="#72FFFFFF" BorderThickness="1">
             <Grid>
             <Grid x:Name="EmptyChat" Padding="48">
               <StackPanel VerticalAlignment="Center" MaxWidth="440" Spacing="18">
@@ -111,24 +111,27 @@
             </Grid>
             <Grid x:Name="ConversationPage" Visibility="Collapsed" RowSpacing="0">
               <Grid.RowDefinitions><RowDefinition Height="68"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-              <controls:GlassPanel x:Name="ConversationHeader" BorderBrush="#48FFFFFF" BorderThickness="0,0,0,1" Padding="20,10" CornerRadius="28,28,0,0">
-                <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions><StackPanel VerticalAlignment="Center" Spacing="3">
-                  <TextBlock x:Name="ActiveChatTitle" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                  <TextBlock x:Name="ActiveChatStatus" FontSize="12" Opacity="0.7" TextTrimming="CharacterEllipsis"/>
-                </StackPanel><TextBox x:Name="MessageSearch" Grid.Column="1" PlaceholderText="Поиск в чате" Visibility="Collapsed" TextChanged="SearchMessages"/></Grid>
+              <controls:GlassPanel x:Name="ConversationHeader" BorderBrush="#58FFFFFF" BorderThickness="0,0,0,1" Padding="16,9" CornerRadius="28,28,0,0">
+                <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="46"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <Grid Width="42" Height="42"><Ellipse Fill="#567F99"/><TextBlock x:Name="ActiveChatAvatarLetter" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/><Ellipse><Ellipse.Fill><ImageBrush x:Name="ActiveChatAvatarBrush" Stretch="UniformToFill"/></Ellipse.Fill></Ellipse></Grid>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2"><TextBlock x:Name="ActiveChatTitle" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="ActiveChatStatus" FontSize="12" Opacity="0.72" TextTrimming="CharacterEllipsis"/></StackPanel>
+                  <Button Grid.Column="2" Content="&#xE721;" FontFamily="Segoe Fluent Icons" Width="40" Height="40" Click="ToggleMessageSearch" ToolTipService.ToolTip="Поиск в чате"/><TextBox x:Name="MessageSearch" Grid.Column="3" Width="220" PlaceholderText="Поиск в чате" Visibility="Collapsed" TextChanged="SearchMessages"/>
+                </Grid>
               </controls:GlassPanel>
-              <ListView x:Name="MessageList" Grid.Row="1" Background="Transparent" SelectionMode="Extended" SelectionChanged="SelectMessage" Loaded="MessageListLoaded" ContainerContentChanging="MessageContainerChanging" ScrollViewer.VerticalScrollBarVisibility="Auto" Padding="20,8">
+              <ListView x:Name="MessageList" Grid.Row="1" Background="Transparent" SelectionMode="Extended" SelectionChanged="SelectMessage" Loaded="MessageListLoaded" ContainerContentChanging="MessageContainerChanging" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Padding="14,12,14,8" HorizontalContentAlignment="Stretch">
                 <ListView.ItemsPanel><ItemsPanelTemplate><ItemsStackPanel Orientation="Vertical"/></ItemsPanelTemplate></ListView.ItemsPanel>
                 <ListView.ItemTemplate><DataTemplate>
-                  <Grid>
+                  <Grid Margin="{Binding RowMargin}" HorizontalAlignment="Stretch">
                     <Border Visibility="{Binding DateVisibility}" Background="#355E7690" CornerRadius="12" HorizontalAlignment="Center" Padding="12,5" Margin="0,12">
                       <TextBlock Text="{Binding DayText}" FontSize="12"/>
                     </Border>
-                    <Border Visibility="{Binding BubbleVisibility}" Background="{Binding BubbleBrush}" CornerRadius="17" Padding="11,7" Margin="0,1" MaxWidth="560" HorizontalAlignment="{Binding Alignment}">
+                    <Grid Visibility="{Binding BubbleVisibility}" HorizontalAlignment="{Binding Alignment}" MaxWidth="760"><Grid.ColumnDefinitions><ColumnDefinition Width="32"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Grid Width="26" Height="26" VerticalAlignment="Bottom" Margin="0,0,6,2" Visibility="{Binding AvatarVisibility}"><Ellipse Fill="#547F99"/><TextBlock Text="{Binding SenderInitial}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="10" FontWeight="SemiBold"/><Ellipse><Ellipse.Fill><ImageBrush ImageSource="{Binding SenderAvatar}" Stretch="UniformToFill"/></Ellipse.Fill></Ellipse></Grid>
+                    <Border Grid.Column="1" Background="{Binding BubbleBrush}" BorderBrush="{Binding BubbleBorderBrush}" BorderThickness="1" CornerRadius="{Binding BubbleCornerRadius}" Padding="12,7" MinWidth="72">
                       <StackPanel Spacing="3">
-                        <TextBlock Text="{Binding Author}" Opacity="0.75" FontSize="11"/>
+                        <TextBlock Text="{Binding Author}" Visibility="{Binding AuthorVisibility}" Foreground="#9EDBFA" FontWeight="SemiBold" FontSize="11"/>
                         <Border Visibility="{Binding QuoteVisibility}" Background="#2689BFE0" BorderBrush="#89CDEB" BorderThickness="3,0,0,0" Padding="8,4" CornerRadius="4">
-                          <TextBlock Text="{Binding Quote}" MaxLines="2" TextTrimming="CharacterEllipsis" FontSize="12"/>
+                          <StackPanel><TextBlock Text="Ответ" FontSize="10" Foreground="#9EDCFA"/><TextBlock Text="{Binding Quote}" MaxLines="2" TextTrimming="CharacterEllipsis" FontSize="12"/></StackPanel>
                         </Border>
                         <StackPanel Visibility="{Binding MediaVisibility}" Loaded="MessageMediaLoaded" Spacing="5">
                           <Image Source="{Binding MediaPreview}" Visibility="{Binding ImageVisibility}" MaxWidth="440" MaxHeight="360" Stretch="Uniform" Tapped="OpenMessageMedia"/>
@@ -160,7 +163,7 @@
                           <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#8ED7FA"/>
                         </StackPanel>
                       </StackPanel>
-                    </Border>
+                    </Border></Grid>
                   </Grid>
                 </DataTemplate></ListView.ItemTemplate>
               </ListView>
@@ -178,17 +181,17 @@
                 <Button x:Name="DeleteButton" Grid.Column="2" Content="Удалить" Click="DeleteSelectedMessage"/>
                 <Button x:Name="ForwardButton" Grid.Column="3" Content="Переслать" Click="ForwardSelectedMessages"/>
               </Grid>
-              <Grid x:Name="ComposerPanel" Grid.Row="3" Padding="14,10" Margin="10" CornerRadius="24" RowSpacing="8" ColumnSpacing="10">
-                <Grid.Background><AcrylicBrush TintColor="#49677E" TintOpacity="0.72" TintLuminosityOpacity="0.30" FallbackColor="#E0223342"/></Grid.Background>
+              <Grid x:Name="ComposerPanel" Grid.Row="3" Padding="12,9" Margin="12,6,12,12" CornerRadius="24" RowSpacing="7" ColumnSpacing="9" BorderBrush="#70FFFFFF" BorderThickness="1">
+                <Grid.Background><AcrylicBrush TintColor="#36566F" TintOpacity="0.76" TintLuminosityOpacity="0.34" FallbackColor="#F0223342"/></Grid.Background>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel x:Name="ComposeContext" Visibility="Collapsed" Orientation="Horizontal" Spacing="10" Grid.ColumnSpan="3">
                   <TextBlock x:Name="ComposeContextText" TextTrimming="CharacterEllipsis" MaxWidth="540" VerticalAlignment="Center"/>
                   <Button Content="Отмена" Click="CancelMessageAction"/>
                 </StackPanel>
-                <Button x:Name="AttachButton" Grid.Row="1" Content="＋" Click="PickAttachment" VerticalAlignment="Bottom" ToolTipService.ToolTip="Прикрепить файл"/>
-                <TextBox x:Name="MessageInput" Grid.Row="1" Grid.Column="1" PlaceholderText="Напиши сообщение…" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="110" TextChanged="MessageInputChanged" PreviewKeyDown="MessageInputPreviewKeyDown"/>
-                <Button x:Name="SendMessageButton" Grid.Row="1" Grid.Column="2" Content="Отправить" Click="SendTelegramMessage" VerticalAlignment="Bottom"/>
+                <Button x:Name="AttachButton" Grid.Row="1" Content="&#xE898;" FontFamily="Segoe Fluent Icons" Width="42" Height="42" Click="PickAttachment" VerticalAlignment="Bottom" ToolTipService.ToolTip="Прикрепить файл"/>
+                <TextBox x:Name="MessageInput" Grid.Row="1" Grid.Column="1" PlaceholderText="Сообщение" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="42" MaxHeight="132" VerticalContentAlignment="Center" ScrollViewer.HorizontalScrollMode="Disabled" TextChanged="MessageInputChanged" PreviewKeyDown="MessageInputPreviewKeyDown"/>
+                <Button x:Name="SendMessageButton" Grid.Row="1" Grid.Column="2" Content="&#xE724;" FontFamily="Segoe Fluent Icons" Width="44" Height="44" CornerRadius="22" Click="SendTelegramMessage" VerticalAlignment="Bottom" ToolTipService.ToolTip="Отправить"/>
                 <TextBlock x:Name="MessengerStatus" Grid.Row="2" Grid.ColumnSpan="3" FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
               </Grid>
             </Grid>

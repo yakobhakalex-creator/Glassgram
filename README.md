@@ -1,4 +1,4 @@
-# Glassgram V0.3.1
+# Glassgram V0.6.0
 
 Glassgram — WinUI 3 клиент Telegram в стиле Liquid Glass с локальной интеграцией Ollama. Открой `Glassgram.slnx` в Visual Studio либо запускай готовую x64-сборку двойным нажатием на `C:\Glassgram\release\Glassgram.exe` — окно консоли не появляется.
 
