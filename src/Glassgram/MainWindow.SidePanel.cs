@@ -11,6 +11,20 @@ namespace Glassgram;
 public partial class MainWindow
 {
     private readonly ObservableCollection<StickerPanelItem> panelStickers = [];
+    private static readonly string[] TelegramEmoji =
+    [
+        "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃",
+        "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜",
+        "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟",
+        "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠",
+        "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗",
+        "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧",
+        "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧",
+        "😷", "🤒", "🤕", "👍", "👎", "👌", "✌️", "🤞", "🤟", "🤘", "👏", "🙌",
+        "👐", "🤲", "🤝", "🙏", "💪", "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤",
+        "🤍", "🤎", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💯",
+        "🔥", "✨", "🎉", "🎊", "✅", "❌", "⚠️", "💬", "👀", "🚀", "🎁", "⭐"
+    ];
     private int stickerLoadVersion;
 
     private void ShowSidePanel(string title)
@@ -101,6 +115,7 @@ public partial class MainWindow
         ProfilePanel.Visibility = Visibility.Collapsed;
         StickersPanel.Visibility = Visibility.Visible;
         StickerGrid.ItemsSource = panelStickers;
+        EmojiGrid.ItemsSource = TelegramEmoji;
         await LoadStickersAsync((StickerCategory.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "recent");
     }
 
@@ -112,6 +127,15 @@ public partial class MainWindow
 
     private async Task LoadStickersAsync(string category)
     {
+        var emoji = category == "emoji";
+        EmojiGrid.Visibility = emoji ? Visibility.Visible : Visibility.Collapsed;
+        StickerGrid.Visibility = emoji ? Visibility.Collapsed : Visibility.Visible;
+        if (emoji)
+        {
+            stickerLoadVersion++;
+            SidePanelTitle.Text = "Эмодзи";
+            return;
+        }
         if (telegram is null) return;
         var version = ++stickerLoadVersion;
         panelStickers.Clear();
@@ -147,6 +171,15 @@ public partial class MainWindow
         }
     }
 
+    private void InsertEmoji(object sender, ItemClickEventArgs args)
+    {
+        if (args.ClickedItem is not string emoji) return;
+        var start = Math.Clamp(MessageInput.SelectionStart, 0, MessageInput.Text.Length);
+        MessageInput.Text = MessageInput.Text.Insert(start, emoji);
+        MessageInput.SelectionStart = start + emoji.Length;
+        MessageInput.Focus(FocusState.Programmatic);
+    }
+
     private async Task<StickerPanelItem?> CreateStickerItemAsync(JsonElement sticker)
     {
         if (telegram is null) return null;
@@ -179,11 +212,19 @@ public partial class MainWindow
             var path = downloaded.Field("local").Field("path").Text();
             if (path.Length == 0 || !File.Exists(path)) throw new IOException("TDLib не загрузила оригинал стикера.");
             var inputFile = new Dictionary<string, object?> { ["@type"] = "inputFileLocal", ["path"] = path };
+            var inputSticker = new Dictionary<string, object?>
+            {
+                ["@type"] = "inputSticker",
+                ["sticker"] = inputFile,
+                ["thumbnail"] = null,
+                ["width"] = sticker.Width,
+                ["height"] = sticker.Height
+            };
             var content = new Dictionary<string, object?>
             {
                 ["@type"] = "inputMessageSticker",
-                ["sticker"] = inputFile,
-                ["thumbnail"] = null, ["width"] = sticker.Width, ["height"] = sticker.Height, ["emoji"] = sticker.Emoji
+                ["sticker"] = inputSticker,
+                ["emoji"] = sticker.Emoji
             };
             var message = await telegram.RequestAsync(new
             {
