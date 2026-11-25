@@ -202,6 +202,8 @@ public partial class MainWindow
 
     private async void MessageInputPreviewKeyDown(object sender, KeyRoutedEventArgs args)
     {
+        HandleComposerShortcut(args);
+        if (args.Handled) return;
         var ctrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
         if (!ctrl || args.Key != Windows.System.VirtualKey.V) return;
         var content = Clipboard.GetContent();

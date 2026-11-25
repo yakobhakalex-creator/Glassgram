@@ -4,6 +4,7 @@ using Glassgram.Telegram;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Windows.ApplicationModel.DataTransfer;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 
@@ -206,6 +207,10 @@ public partial class MainWindow
 
     private async void MessageInputChanged(object sender, TextChangedEventArgs args)
     {
+        if (!suppressDraftSave && activeChat is not null)
+        {
+            if (MessageInput.Text.Length == 0) preferences.Drafts.Remove(activeChat.Id); else preferences.Drafts[activeChat.Id] = MessageInput.Text;
+        }
         if (telegram is null || activeChat is null || MessageInput.Text.Length == 0 || DateTime.UtcNow - lastTypingSent < TimeSpan.FromSeconds(4)) return;
         lastTypingSent = DateTime.UtcNow;
         try
@@ -221,9 +226,12 @@ public partial class MainWindow
 
     private async void SelectMessage(object sender, SelectionChangedEventArgs args)
     {
-        selectedMessage = MessageList.SelectedItem as MessageRow;
-        MessageActions.Visibility = selectedMessage is null || selectedMessage.IsDate ? Visibility.Collapsed : Visibility.Visible;
+        var selected = SelectedMessages();
+        selectedMessage = selected.Count == 1 ? selected[0] : null;
+        MessageActions.Visibility = selected.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         EditButton.IsEnabled = DeleteButton.IsEnabled = ReplyButton.IsEnabled = false;
+        ForwardButton.IsEnabled = selected.Count > 0;
+        if (selected.Count > 1) { DeleteButton.IsEnabled = true; return; }
         if (selectedMessage is null || selectedMessage.IsDate || telegram is null || activeChat is null) return;
         var id = selectedMessage.Id;
         try
@@ -266,12 +274,24 @@ public partial class MainWindow
     {
         if (sender is not ListViewItem target || target.Content is not MessageRow row || row.IsDate) return;
         var menu = new MenuFlyout();
+        var copy = new MenuFlyoutItem { Text = "Копировать текст", DataContext = row };
+        var copyLink = new MenuFlyoutItem { Text = "Копировать ссылку", DataContext = row };
+        var forward = new MenuFlyoutItem { Text = "Переслать", DataContext = row };
+        var select = new MenuFlyoutItem { Text = "Выделить", DataContext = row };
         var reply = new MenuFlyoutItem { Text = "Ответить", DataContext = row };
         var edit = new MenuFlyoutItem { Text = "Изменить", DataContext = row };
         var delete = new MenuFlyoutItem { Text = "Удалить", DataContext = row };
         reply.Click += ContextReply;
         edit.Click += ContextEdit;
         delete.Click += ContextDelete;
+        copy.Click += CopyMessageText;
+        copyLink.Click += CopyMessageLink;
+        forward.Click += ContextForward;
+        select.Click += ContextSelect;
+        menu.Items.Add(copy);
+        menu.Items.Add(copyLink);
+        menu.Items.Add(forward);
+        menu.Items.Add(select);
         menu.Items.Add(reply);
         menu.Items.Add(edit);
         menu.Items.Add(delete);
@@ -367,6 +387,8 @@ public partial class MainWindow
                 MessageInput.Text = "";
                 CancelMessageAction(null!, null!);
                 MessengerStatus.Text = "";
+                preferences.Drafts.Remove(chatId);
+                SavePreferences();
             }
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException or JsonException)
@@ -378,26 +400,31 @@ public partial class MainWindow
 
     private async void DeleteSelectedMessage(object sender, RoutedEventArgs args)
     {
-        if (selectedMessage is null || activeChat is null || telegram is null) return;
+        var selected = SelectedMessages();
+        if (selected.Count == 0 || activeChat is null || telegram is null) return;
         var chatId = activeChat.Id;
-        var messageId = selectedMessage.Id;
         try
         {
-            var properties = await telegram.RequestAsync(new { @type = "getMessageProperties", chat_id = chatId, message_id = messageId }, lifetime.Token);
-            var revoke = properties.Field("can_be_deleted_for_all_users").Flag();
-            if (!revoke && !properties.Field("can_be_deleted_only_for_self").Flag()) return;
+            var ids = selected.Select(message => message.Id).ToArray();
+            var revoke = true;
+            foreach (var id in ids)
+            {
+                var properties = await telegram.RequestAsync(new { @type = "getMessageProperties", chat_id = chatId, message_id = id }, lifetime.Token);
+                if (!properties.Field("can_be_deleted_for_all_users").Flag()) revoke = false;
+                if (!properties.Field("can_be_deleted_for_all_users").Flag() && !properties.Field("can_be_deleted_only_for_self").Flag()) return;
+            }
             var dialog = new ContentDialog
             {
                 XamlRoot = Root.XamlRoot,
-                Title = "Удалить сообщение?",
-                Content = revoke ? "Сообщение будет удалено у всех участников." : "Сообщение будет удалено только у тебя.",
+                Title = ids.Length == 1 ? "Удалить сообщение?" : $"Удалить сообщения ({ids.Length})?",
+                Content = revoke ? "Выбранные сообщения будут удалены у всех участников." : "Выбранные сообщения будут удалены только у тебя.",
                 PrimaryButtonText = "Удалить",
                 CloseButtonText = "Отмена",
                 DefaultButton = ContentDialogButton.Close
             };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-            await telegram.RequestAsync(new { @type = "deleteMessages", chat_id = chatId, message_ids = new[] { messageId }, revoke }, lifetime.Token);
-            if (histories.TryGetValue(chatId, out var history)) history.Messages.Remove(messageId);
+            await telegram.RequestAsync(new { @type = "deleteMessages", chat_id = chatId, message_ids = ids, revoke }, lifetime.Token);
+            if (histories.TryGetValue(chatId, out var history)) foreach (var id in ids) history.Messages.Remove(id);
             if (histories.TryGetValue(chatId, out history)) _ = SaveHistoryCacheAsync(chatId, history);
             if (activeChat?.Id == chatId) RenderHistory(chatId);
         }

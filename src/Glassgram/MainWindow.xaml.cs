@@ -31,13 +31,15 @@ public partial class MainWindow : Window
             Endpoint.Text = preferences.Endpoint;
             ChatColumn.Width = new GridLength(Math.Clamp(preferences.ChatPaneWidth, 240, 540));
             ThemeChoice.SelectedIndex = preferences.Theme == "Light" ? 1 : 0;
+            SendModeChoice.SelectedIndex = preferences.SendMode == "CtrlEnter" ? 1 : 0;
+            MinimizeToTrayChoice.IsOn = preferences.MinimizeToTray;
             ApplyTheme();
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
             SettingsStatus.Text = "Не удалось прочитать настройки. " + ex.Message;
         }
-        Closed += (_, _) => { lifetime.Cancel(); http.Dispose(); };
+        Closed += (_, _) => { SaveCurrentDraft(); lifetime.Cancel(); http.Dispose(); };
         InitializeMedia();
         InitializeTelegram();
     }
@@ -136,6 +138,8 @@ public partial class MainWindow : Window
         try
         {
             preferences.Endpoint = Endpoint.Text.Trim();
+            preferences.SendMode = (SendModeChoice.SelectedItem as ComboBoxItem)?.Tag?.ToString() == "CtrlEnter" ? "CtrlEnter" : "Enter";
+            preferences.MinimizeToTray = MinimizeToTrayChoice.IsOn;
             ServerUri();
             SavePreferences();
             SettingsStatus.Text = "Настройки сохранены.";
@@ -178,4 +182,7 @@ public sealed class Preferences
     public string Model { get; set; } = "";
     public string Theme { get; set; } = "Dark";
     public double ChatPaneWidth { get; set; } = 320;
+    public string SendMode { get; set; } = "Enter";
+    public bool MinimizeToTray { get; set; }
+    public Dictionary<long, string> Drafts { get; set; } = [];
 }

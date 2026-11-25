@@ -37,6 +37,8 @@ public partial class MainWindow
     private double resizeStartWidth;
     private DateTime lastTypingSent;
     private DateTime lastTypingReceived;
+    private bool showingArchive;
+    private bool suppressDraftSave;
 
     private sealed class ChatHistory
     {
@@ -159,7 +161,7 @@ public partial class MainWindow
         var selected = activeChat?.Id;
         var query = ChatSearch.Text.Trim();
         var rows = knownChats.Values
-            .Where(c => c.IsMain || c.IsArchive || c.IsSaved)
+            .Where(c => showingArchive ? c.IsArchive || c.IsSaved : c.IsMain || c.IsSaved)
             .Where(c => query.Length == 0 || c.Title.Contains(query, StringComparison.CurrentCultureIgnoreCase))
             .OrderByDescending(c => c.IsSaved)
             .ThenByDescending(c => c.IsMain)
@@ -203,6 +205,7 @@ public partial class MainWindow
             }
             if (activeChat is not null)
             {
+                SaveCurrentDraft();
                 SaveScrollPosition();
                 _ = telegram.RequestAsync(new { @type = "closeChat", chat_id = activeChat.Id }, lifetime.Token);
             }
@@ -213,7 +216,9 @@ public partial class MainWindow
             ConversationPage.Visibility = Visibility.Visible;
             ActiveChatTitle.Text = chat.Title;
             UpdateComposerAvailability();
-            MessageInput.Text = "";
+            suppressDraftSave = true;
+            MessageInput.Text = preferences.Drafts.GetValueOrDefault(chat.Id, "");
+            suppressDraftSave = false;
             CancelMessageAction(null!, null!);
             UpdateActiveStatus();
             await telegram.RequestAsync(new { @type = "openChat", chat_id = chat.Id }, lifetime.Token);
@@ -394,7 +399,8 @@ public partial class MainWindow
         visibleMessages.Clear();
         DateTime? lastDay = null;
         var lastRead = knownChats.TryGetValue(chatId, out var chat) ? chat.LastReadOutboxId : 0;
-        foreach (var row in history.Messages.Values.OrderBy(m => m.Date).ThenBy(m => m.Id))
+        var query = MessageSearch.Text.Trim();
+        foreach (var row in history.Messages.Values.OrderBy(m => m.Date).ThenBy(m => m.Id).Where(m => query.Length == 0 || m.Text.Contains(query, StringComparison.CurrentCultureIgnoreCase)))
         {
             RegisterMessageFiles(row);
             if (lastDay != row.Date.Date)

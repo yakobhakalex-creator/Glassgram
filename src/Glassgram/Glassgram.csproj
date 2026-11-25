@@ -12,7 +12,7 @@
     <SelfContained>true</SelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\Glassgram.ico</ApplicationIcon>
-    <Version>0.3.1</Version>
+    <Version>0.4.0</Version>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
