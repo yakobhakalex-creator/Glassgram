@@ -167,8 +167,7 @@ public partial class MainWindow
         var rows = knownChats.Values
             .Where(c => showingArchive ? c.IsArchive : c.IsMain)
             .Where(c => query.Length == 0 || c.Title.Contains(query, StringComparison.CurrentCultureIgnoreCase))
-            .OrderByDescending(c => c.IsPinnedIn(showingArchive ? "chatListArchive" : "chatListMain"))
-            .ThenByDescending(c => c.GetOrder(showingArchive ? "chatListArchive" : "chatListMain"))
+            .OrderByDescending(c => c.GetOrder(showingArchive ? "chatListArchive" : "chatListMain"))
             .ThenByDescending(c => c.Id)
             .ToArray();
         if (rows.Length == visibleChats.Count && rows.SequenceEqual(visibleChats)) return;

@@ -25,7 +25,6 @@ public partial class MainWindow
             case "updateNewChat":
                 UpsertChat(update.Field("chat"));
                 break;
-            case "updateChatLastMessage":
             case "updateChatTitle":
             case "updateChatPhoto":
             case "updateChatReadInbox":
@@ -33,10 +32,18 @@ public partial class MainWindow
             case "updateChatIsMarkedAsUnread":
             case "updateChatUnreadMentionCount":
             case "updateChatUnreadReactionCount":
-            case "updateChatDraftMessage":
             case "updateChatNotificationSettings":
             case "updateChatAvailableReactions":
             case "updateChatPermissions":
+                _ = RefreshChatAsync(chatId);
+                break;
+            case "updateChatLastMessage":
+            case "updateChatDraftMessage":
+                if (knownChats.TryGetValue(chatId, out var moved))
+                {
+                    moved.ApplyPositions(update.Field("positions"));
+                    RefreshChatList();
+                }
                 _ = RefreshChatAsync(chatId);
                 break;
             case "updateChatPosition":

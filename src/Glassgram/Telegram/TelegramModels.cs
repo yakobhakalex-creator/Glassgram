@@ -102,20 +102,25 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
             CanSendVideos = permissions.Field("can_send_videos").Flag();
             CanSendDocuments = permissions.Field("can_send_documents").Flag();
         }
+        ApplyPositions(chat.Field("positions"));
+        var small = chat.Field("photo").Field("small");
+        PhotoFileId = (int)small.Field("id").Number();
+        SetAvatar(small.Field("local").Field("path").Text());
+        RaiseAll();
+    }
+
+    public void ApplyPositions(JsonElement positions)
+    {
         listOrders.Clear();
+        listPinned.Clear();
         IsMain = false;
         IsArchive = false;
-        listPinned.Clear();
-        foreach (var position in chat.Field("positions").Items())
+        foreach (var position in positions.Items())
         {
             var list = ListKey(position.Field("list"));
             var order = position.Field("order").Number();
             ApplyList(list, order != 0, order, position.Field("is_pinned").Flag());
         }
-        var small = chat.Field("photo").Field("small");
-        PhotoFileId = (int)small.Field("id").Number();
-        SetAvatar(small.Field("local").Field("path").Text());
-        RaiseAll();
     }
 
     public void ApplyList(string listType, bool present = true, long order = 0, bool pinned = false)
