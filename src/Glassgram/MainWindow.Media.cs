@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text.Json;
-using CommunityToolkit.WinUI.Lottie;
 using Glassgram.Telegram;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -9,7 +8,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Microsoft.Web.WebView2.Core;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Media.Core;
 using Windows.Media.Playback;
@@ -276,21 +274,68 @@ public partial class MainWindow
 
     private async Task OpenTgsViewerAsync(MessageRow row)
     {
-        var player = new AnimatedVisualPlayer { AutoPlay = true, Stretch = Stretch.Uniform };
+        var path = await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
+        if (!File.Exists(path)) return;
+        var player = CreateTgsPlayer();
+        player.IsHitTestVisible = true;
         var viewer = OpenMediaWindow(player, "Анимированный стикер");
-        await LoadTgsAsync(player, row);
-        viewer.Closed += (_, _) => player.Stop();
+        viewer.Closed += (_, _) => player.Close();
+        await ConfigureTgsPlayerAsync(player, row.PrimaryFileId, path, () => true, () => true, () => { });
     }
 
-    private async Task LoadTgsAsync(AnimatedVisualPlayer player, MessageRow row)
+    private static WebView2 CreateTgsPlayer() => new()
     {
-        if (row.MediaPath.Length == 0) await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
-        if (row.MediaPath.Length == 0) return;
-        var jsonPath = await ExpandTgsAsync(row.PrimaryFileId, row.MediaPath, lifetime.Token);
-        var source = new LottieVisualSource();
-        await source.SetSourceAsync(await StorageFile.GetFileFromPathAsync(jsonPath));
-        player.Source = source;
-        await player.PlayAsync(0, 1, true);
+        DefaultBackgroundColor = Microsoft.UI.Colors.Transparent,
+        IsHitTestVisible = false
+    };
+
+    private static readonly Lazy<Task<string>> LottieScript = new(() => File.ReadAllTextAsync(
+        Path.Combine(AppContext.BaseDirectory, "Assets", "Lottie", "lottie_light.min.js")));
+
+    private async Task ConfigureTgsPlayerAsync(WebView2 player, int fileId, string path,
+        Func<bool> isCurrent, Func<bool> isVisible, Action ready)
+    {
+        var jsonPath = await ExpandTgsAsync(fileId, path, lifetime.Token);
+        if (new FileInfo(jsonPath).Length > 1024 * 1024)
+            throw new InvalidDataException("TGS превышает допустимый размер для встроенного проигрывателя.");
+        var bytes = await File.ReadAllBytesAsync(jsonPath, lifetime.Token);
+        var script = await LottieScript.Value;
+        if (!isCurrent()) return;
+        await player.EnsureCoreWebView2Async();
+        if (!isCurrent()) return;
+        var core = player.CoreWebView2;
+        core.Settings.AreDefaultContextMenusEnabled = false;
+        core.Settings.AreDevToolsEnabled = false;
+        core.WebMessageReceived += (sender, args) =>
+        {
+            if (isCurrent() && args.TryGetWebMessageAsString() == "ready")
+            {
+                ready();
+                _ = SetTgsPlayingAsync(player, isVisible());
+            }
+        };
+        player.NavigateToString($$"""
+            <!doctype html><html><head><meta charset="utf-8">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+            <style>html,body,#sticker{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}</style>
+            </head><body><div id="sticker"></div><script>{{script}}</script>
+            <script>
+            const data = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob("{{Convert.ToBase64String(bytes)}}"), c => c.charCodeAt(0))));
+            window.sticker = lottie.loadAnimation({container:document.getElementById('sticker'),
+                renderer:'svg', loop:true, autoplay:false, animationData:data});
+            window.sticker.addEventListener('DOMLoaded', () => chrome.webview.postMessage('ready'));
+            </script></body></html>
+            """);
+    }
+
+    private static async Task SetTgsPlayingAsync(WebView2 player, bool playing)
+    {
+        try
+        {
+            if (player.CoreWebView2 is { } core)
+                await core.ExecuteScriptAsync(playing ? "window.sticker?.play()" : "window.sticker?.pause()");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException) { }
     }
 
     private static async Task<string> ExpandTgsAsync(int fileId, string sourcePath, CancellationToken token)
@@ -312,125 +357,139 @@ public partial class MainWindow
         finally { TgsCacheGate.Release(); }
     }
 
-    private async void InlineVideoLoaded(object sender, RoutedEventArgs args)
+    // Viewport and recycling lifecycle adapted from Unigram AnimatedImage and StickerContent,
+    // GPL-3.0, commit 9354bcb753be3b16086bd3886b8adec062ccdd91.
+    private readonly Dictionary<Grid, StickerPlayback> stickerPlayback = [];
+
+    private void StickerViewportChanged(FrameworkElement sender, EffectiveViewportChangedEventArgs args)
     {
-        if (sender is not MediaPlayerElement element || element.DataContext is not MessageRow row) return;
-        try
+        if (sender is not Grid host) return;
+        var bounds = args.EffectiveViewport;
+        var visible = bounds.Width > 0 && bounds.Height > 0 &&
+            bounds.Right > 0 && bounds.Bottom > 0 &&
+            bounds.Left < host.ActualWidth && bounds.Top < host.ActualHeight;
+        if (stickerPlayback.TryGetValue(host, out var playback))
         {
-            if (row.MediaPath.Length == 0) await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
-            if (row.MediaPath.Length == 0) return;
-            var file = await StorageFile.GetFileFromPathAsync(row.MediaPath);
-            var player = new MediaPlayer
+            if (playback.Visible == visible) return;
+            playback.Visible = visible;
+            if (playback.Player is WebView2 lottie) _ = SetTgsPlayingAsync(lottie, visible);
+            else if (playback.Player is MediaPlayerElement { MediaPlayer: { } video })
             {
-                AutoPlay = true,
-                IsMuted = true,
-                IsLoopingEnabled = true
-            };
-            player.MediaOpened += (_, _) => DispatcherQueue.TryEnqueue(() =>
+                if (visible && playback.MediaOpened) video.Play();
+                else if (video.PlaybackSession.CanPause) video.Pause();
+            }
+        }
+        else if (visible)
+        {
+            StartStickerPlayback(host);
+        }
+    }
+
+    private void StickerDataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
+    {
+        if (sender is Grid host && stickerPlayback.TryGetValue(host, out var playback))
+        {
+            var visible = playback.Visible;
+            ReleaseStickerPlayback(host);
+            if (visible && host.IsLoaded) StartStickerPlayback(host);
+        }
+    }
+
+    private void StickerUnloaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is Grid host) ReleaseStickerPlayback(host);
+    }
+
+    private void ReleaseStickerPlayback(Grid host)
+    {
+        if (!stickerPlayback.Remove(host, out var playback)) return;
+        if (playback.Player is WebView2 lottie) lottie.Close();
+        else if (playback.Player is MediaPlayerElement video)
+        {
+            var player = video.MediaPlayer;
+            if (player is not null)
             {
-                if (!ReferenceEquals(element.DataContext, row)) return;
-                if (FindAncestor<Grid>(element)?.Children.OfType<Image>().FirstOrDefault() is { } preview)
-                    preview.Visibility = Visibility.Collapsed;
-                player.Play();
-            });
-            player.MediaFailed += (_, eventArgs) => DispatcherQueue.TryEnqueue(() =>
-                row.SetTransferError("Ошибка анимации: " + eventArgs.ErrorMessage));
-            if (!ReferenceEquals(element.DataContext, row)) { player.Dispose(); return; }
-            element.SetMediaPlayer(player);
-            player.Source = MediaSource.CreateFromStorageFile(file);
-            player.Play();
+                if (player.PlaybackSession.CanPause) player.Pause();
+                var source = player.Source as MediaSource;
+                player.Source = null;
+                video.SetMediaPlayer(null);
+                source?.Dispose();
+                player.Dispose();
+            }
         }
-        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException or TimeoutException or InvalidOperationException)
+        if (playback.Player is not null) host.Children.Remove(playback.Player);
+        if (host.Children[0] is Image preview) preview.Visibility = Visibility.Visible;
+    }
+
+    private async void StartStickerPlayback(Grid host)
+    {
+        var context = host.DataContext;
+        var (fileId, format) = context switch
         {
-            if (!lifetime.IsCancellationRequested) row.SetTransferError("Ошибка анимации: " + ex.Message);
-        }
-    }
-
-    private void InlineVideoUnloaded(object sender, RoutedEventArgs args)
-    {
-        if (sender is not MediaPlayerElement element) return;
-        var player = element.MediaPlayer;
-        element.SetMediaPlayer(null);
-        player?.Dispose();
-    }
-
-    private async void InlineWebmLoaded(object sender, RoutedEventArgs args)
-    {
-        if (sender is not WebView2 web || web.DataContext is not MessageRow row) return;
+            MessageRow row when row.TgsVisibility == Visibility.Visible => (row.PrimaryFileId, "stickerFormatTgs"),
+            MessageRow row when row.InlineVideoVisibility == Visibility.Visible => (row.PrimaryFileId, "stickerFormatWebm"),
+            StickerPanelItem item => (item.FileId, item.Format),
+            _ => (0, "")
+        };
+        if (fileId == 0 || format is not ("stickerFormatTgs" or "stickerFormatWebm")) return;
+        var playback = new StickerPlayback();
+        stickerPlayback.Add(host, playback);
+        bool IsCurrent() => host.IsLoaded && ReferenceEquals(host.DataContext, context) &&
+            stickerPlayback.TryGetValue(host, out var current) && ReferenceEquals(current, playback);
         try
         {
-            if (row.MediaPath.Length == 0) await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
-            if (row.MediaPath.Length == 0 || !ReferenceEquals(web.DataContext, row)) return;
-            await web.EnsureCoreWebView2Async();
-            var folder = Path.GetDirectoryName(row.MediaPath) ?? throw new IOException("Папка WEBM не найдена.");
-            web.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                "glassgram.media", folder, CoreWebView2HostResourceAccessKind.DenyCors);
-            var fileName = Uri.EscapeDataString(Path.GetFileName(row.MediaPath));
-            web.NavigationCompleted += async (_, completed) =>
+            var path = context is MessageRow message
+                ? await DownloadMessageFileAsync(message, fileId, true)
+                : await GetStickerFileAsync(fileId, ((StickerPanelItem)context).MediaPath, 8);
+            if (!IsCurrent() || !File.Exists(path)) return;
+            if (format == "stickerFormatTgs")
             {
-                if (!completed.IsSuccess || !ReferenceEquals(web.DataContext, row)) return;
-                if (FindAncestor<Grid>(web)?.Children.OfType<Image>().FirstOrDefault() is { } preview)
-                    preview.Visibility = Visibility.Collapsed;
-                await web.ExecuteScriptAsync("document.querySelector('video')?.play()");
-            };
-            web.NavigateToString($$"""
-                <!doctype html><html><head><meta charset="utf-8"><style>
-                html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
-                video{width:100%;height:100%;object-fit:contain;background:transparent}
-                </style></head><body><video src="https://glassgram.media/{{fileName}}"
-                autoplay loop muted playsinline></video></body></html>
-                """);
+                var player = CreateTgsPlayer();
+                host.Children.Add(player);
+                playback.Player = player;
+                await ConfigureTgsPlayerAsync(player, fileId, path, IsCurrent, () => playback.Visible, () =>
+                {
+                    if (host.Children[0] is Image preview) preview.Visibility = Visibility.Collapsed;
+                });
+            }
+            else
+            {
+                var file = await StorageFile.GetFileFromPathAsync(path);
+                if (!IsCurrent()) return;
+                var element = new MediaPlayerElement { Stretch = Stretch.Uniform, IsHitTestVisible = false };
+                var player = new MediaPlayer { IsMuted = true, IsLoopingEnabled = true };
+                host.Children.Add(element);
+                playback.Player = element;
+                element.SetMediaPlayer(player);
+                player.MediaOpened += (_, _) => DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (!IsCurrent()) return;
+                    playback.MediaOpened = true;
+                    if (host.Children[0] is Image preview) preview.Visibility = Visibility.Collapsed;
+                    if (playback.Visible) player.Play();
+                });
+                player.MediaFailed += (_, _) => DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (!IsCurrent()) return;
+                    element.Visibility = Visibility.Collapsed;
+                    if (host.Children[0] is Image preview) preview.Visibility = Visibility.Visible;
+                });
+                player.Source = MediaSource.CreateFromStorageFile(file);
+            }
         }
-        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException or TimeoutException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or
+            UnauthorizedAccessException or TimeoutException or InvalidOperationException or System.Runtime.InteropServices.COMException)
         {
-            if (!lifetime.IsCancellationRequested) row.SetTransferError("Ошибка WEBM: " + ex.Message);
+            if (IsCurrent() && context is MessageRow row && !lifetime.IsCancellationRequested)
+                row.SetTransferError("Ошибка анимации: " + ex.Message);
         }
     }
 
-    private void InlineWebmUnloaded(object sender, RoutedEventArgs args)
+    private sealed class StickerPlayback
     {
-        if (sender is WebView2 { CoreWebView2: { } core }) core.Navigate("about:blank");
-    }
-
-    // Viewport-driven playback follows Unigram's StickerContent/AnimatedImage lifecycle
-    // (GPL-3.0, commit 9354bcb753be3b16086bd3886b8adec062ccdd91).
-    private async void InlineWebmViewportChanged(FrameworkElement sender, EffectiveViewportChangedEventArgs args)
-    {
-        if (sender is not WebView2 { CoreWebView2: { } } web) return;
-        try
-        {
-            var visible = args.EffectiveViewport.Width > 0 && args.EffectiveViewport.Height > 0;
-            await web.ExecuteScriptAsync(visible ? "document.querySelector('video')?.play()" : "document.querySelector('video')?.pause()");
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException) { }
-    }
-
-    private async void InlineTgsLoaded(object sender, RoutedEventArgs args)
-    {
-        if (sender is not AnimatedVisualPlayer player || player.DataContext is not MessageRow row) return;
-        try
-        {
-            await LoadTgsAsync(player, row);
-            if (!ReferenceEquals(player.DataContext, row)) { player.Stop(); return; }
-            if (FindAncestor<Grid>(player)?.Children.OfType<Image>().FirstOrDefault() is { } preview)
-                preview.Visibility = Visibility.Collapsed;
-        }
-        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException or TimeoutException or InvalidOperationException)
-        {
-            if (!lifetime.IsCancellationRequested) row.SetTransferError("Ошибка анимации: " + ex.Message);
-        }
-    }
-
-    private void InlineTgsUnloaded(object sender, RoutedEventArgs args)
-    {
-        if (sender is AnimatedVisualPlayer player) player.Stop();
-    }
-
-    private async void InlineTgsViewportChanged(FrameworkElement sender, EffectiveViewportChangedEventArgs args)
-    {
-        if (sender is not AnimatedVisualPlayer player) return;
-        if (args.EffectiveViewport.Width > 0 && args.EffectiveViewport.Height > 0) await player.PlayAsync(0, 1, true);
-        else player.Pause();
+        public bool Visible { get; set; } = true;
+        public bool MediaOpened { get; set; }
+        public FrameworkElement? Player { get; set; }
     }
 
     private async void OpenMessageLink(object sender, RoutedEventArgs args)

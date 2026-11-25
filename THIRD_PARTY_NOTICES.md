@@ -7,6 +7,7 @@
 | TDLib и `tdlib.native.win-x64` | 1.8.67 | BSL-1.0, Apache-2.0, Zlib | Совместимы. Сохранять включённые copyright, license и notice-файлы. |
 | QRCoder | 1.6.0 | MIT | Совместима. Сохранять copyright и текст MIT. |
 | CommunityToolkit.WinUI.Lottie | 8.2.250604 | MIT | Совместима. Сохранять copyright и текст MIT. |
+| Lottie Web Light | 5.13.0 | MIT | [Upstream](https://github.com/airbnb/lottie-web/tree/v5.13.0). Неизменённый файл `build/player/lottie_light.min.js` и лицензия в `src/Glassgram/Assets/Lottie`. |
 | System.Security.Cryptography.ProtectedData | 11.0.0 | MIT | Совместима. Сохранять MIT и поставляемые third-party notices. |
 | Microsoft.Win32.SystemEvents, System.Drawing.Common | 6.0.0 | MIT | Совместима. Сохранять MIT и поставляемые third-party notices. |
 | Microsoft Windows App SDK, WinUI и SDK BuildTools | 1.6.241114003, 2.7.0, 10.0.26100.4654 | Microsoft Software License Terms | Использование и распространение разрешаются соответствующими условиями Microsoft. Компоненты не перелицензируются под GPL. При выпуске сохранять поставляемые `license.txt` и `NOTICE.txt`. |
@@ -34,6 +35,12 @@
 | Общие материалы | `Telegram/Collections/MediaCollection.cs` | `src/Glassgram/MainWindow.SidePanel.cs` | Адаптирована постраничная загрузка `searchChatMessages`. |
 | Профили | `Telegram/ViewModels/ProfileViewModel.cs` | `src/Glassgram/MainWindow.SidePanel.cs` | Адаптированы запросы пользователей, групп и каналов. |
 | Жизненный цикл стикеров | `Telegram/Controls/Messages/Content/StickerContent.xaml.cs`, `Telegram/Controls/AnimatedImage.cs` | `src/Glassgram/MainWindow.Media.cs` | Воспроизведение WEBM/TGS связано с видимостью во viewport. |
+
+## Noto Color Emoji
+
+Glassgram поставляет Windows-совместимую сборку [Noto Color Emoji v2.051](https://github.com/googlefonts/noto-emoji/blob/v2.051/fonts/NotoColorEmoji_WindowsCompatible.ttf) без изменений содержимого. Copyright Google LLC, лицензия SIL Open Font License 1.1, текст в `src/Glassgram/Assets/Emoji/OFL.txt`. SHA-256 файла `19473341d23f8fdf90e91ffca381d727c43f7bc05b2758dec9687a58fbb81150`.
+
+`apple.ttf` из Unigram в Glassgram не включён. Этот файл содержит отдельное уведомление JoyPixels / EmojiOne Free License.
 
 ## Источники лицензий
 

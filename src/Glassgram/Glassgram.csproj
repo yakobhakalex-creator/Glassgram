@@ -28,6 +28,10 @@
   <ItemGroup>
     <Content Include="Assets\Glassgram.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\Glassgram.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Emoji\NotoColorEmoji.ttf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\Emoji\OFL.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\Lottie\lottie_light.min.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\Lottie\LICENSE.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="CopyWinUIResourcesToPublishDirectory" AfterTargets="Publish">
     <ItemGroup>

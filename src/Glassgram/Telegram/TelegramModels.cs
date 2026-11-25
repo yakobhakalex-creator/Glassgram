@@ -46,6 +46,7 @@ internal static class TdJson
             "messageVideo" => "Видео",
             "messageAnimation" => "GIF",
             "messageSticker" => "Стикер",
+            "messageAnimatedEmoji" => content.Field("emoji").Text(),
             "messageVoiceNote" => "Голосовое сообщение",
             "messageAudio" => "Аудио",
             "messageDocument" => "Файл",
@@ -280,8 +281,10 @@ internal sealed class MessageRow : INotifyPropertyChanged
                 MimeType = video.Field("mime_type").Text();
                 break;
             case "messageSticker":
+            case "messageAnimatedEmoji":
+                var sticker = type == "messageSticker" ? content.Field("sticker") : content.Field("animated_emoji").Field("sticker");
+                if (sticker.ValueKind != JsonValueKind.Object) break;
                 MediaKind = "sticker";
-                var sticker = content.Field("sticker");
                 primary = sticker.Field("sticker");
                 preview = sticker.Field("thumbnail").Field("file");
                 StickerFormat = sticker.Field("format").Field("@type").Text();
