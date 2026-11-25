@@ -123,7 +123,7 @@ public partial class MainWindow
                 stickers.AddRange((await telegram.RequestAsync(new { @type = "getFavoriteStickers" }, lifetime.Token)).Field("stickers").Items());
             else if (category == "installed")
             {
-                var sets = (await telegram.RequestAsync(new { @type = "getInstalledStickerSets", sticker_type = new { @type = "stickerTypeRegular" } }, lifetime.Token)).Field("sets").Items().Take(12).ToArray();
+                var sets = (await telegram.RequestAsync(new { @type = "getInstalledStickerSets", sticker_type = new Dictionary<string, object?> { ["@type"] = "stickerTypeRegular" } }, lifetime.Token)).Field("sets").Items().Take(12).ToArray();
                 foreach (var set in sets)
                 {
                     var full = await telegram.RequestAsync(new { @type = "getStickerSet", set_id = set.Field("id").Number() }, lifetime.Token);
@@ -175,10 +175,16 @@ public partial class MainWindow
         if (args.ClickedItem is not StickerPanelItem sticker || telegram is null || activeChat is null) return;
         try
         {
+            var content = new Dictionary<string, object?>
+            {
+                ["@type"] = "inputMessageSticker",
+                ["sticker"] = new Dictionary<string, object?> { ["@type"] = "inputFileId", ["id"] = sticker.FileId },
+                ["thumbnail"] = null, ["width"] = sticker.Width, ["height"] = sticker.Height, ["emoji"] = sticker.Emoji
+            };
             var message = await telegram.RequestAsync(new
             {
-                @type = "sendMessage", chat_id = activeChat.Id, topic_id = (object?)null, reply_to = (object?)null, options = (object?)null, reply_markup = (object?)null,
-                input_message_content = new { @type = "inputMessageSticker", sticker = new { @type = "inputFileId", id = sticker.FileId }, thumbnail = (object?)null, width = sticker.Width, height = sticker.Height, emoji = sticker.Emoji }
+                @type = "sendMessage", chat_id = activeChat.Id, topic_id = (object?)null, reply_to = (object?)null,
+                options = (object?)null, reply_markup = (object?)null, input_message_content = content
             }, lifetime.Token);
             InsertMessage(message);
         }
