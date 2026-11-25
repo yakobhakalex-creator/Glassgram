@@ -76,6 +76,8 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
     public bool IsMuted { get; private set; }
     public bool IsSaved { get; set; }
     public long UserId { get; private set; }
+    public long BasicGroupId { get; private set; }
+    public long SupergroupId { get; private set; }
     public string Kind { get; private set; } = "";
     public long LastReadOutboxId { get; private set; }
     public int PhotoFileId { get; private set; }
@@ -98,6 +100,8 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
         IsMarkedUnread = chat.Field("is_marked_as_unread").Flag();
         IsMuted = chat.Field("notification_settings").Field("mute_for").Number() > 0;
         UserId = chat.Field("type").Field("@type").Text() == "chatTypePrivate" ? chat.Field("type").Field("user_id").Number() : 0;
+        BasicGroupId = chat.Field("type").Field("@type").Text() == "chatTypeBasicGroup" ? chat.Field("type").Field("basic_group_id").Number() : 0;
+        SupergroupId = chat.Field("type").Field("@type").Text() == "chatTypeSupergroup" ? chat.Field("type").Field("supergroup_id").Number() : 0;
         Kind = chat.Field("type").Field("@type").Text();
         var permissions = chat.Field("permissions");
         if (permissions.ValueKind == JsonValueKind.Object)

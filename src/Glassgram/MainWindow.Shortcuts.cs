@@ -56,6 +56,7 @@ public partial class MainWindow
 
     private void CancelCurrentAction()
     {
+        if (FutureSidePanel.Visibility == Visibility.Visible) { CloseSidePanel(this, new RoutedEventArgs()); return; }
         if (MessageSearch.Visibility == Visibility.Visible) { MessageSearch.Text = ""; MessageSearch.Visibility = Visibility.Collapsed; if (activeChat is not null) RenderHistory(activeChat.Id); return; }
         if (ComposeContext.Visibility == Visibility.Visible) { CancelMessageAction(this, new RoutedEventArgs()); return; }
         MessageList.SelectedItems.Clear();
