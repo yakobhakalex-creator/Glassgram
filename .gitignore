@@ -4,5 +4,16 @@
 *.user
 *.session
 *.sqlite3
+*.sqlite
+*.db
+*.key
+*.pem
+*.pfx
 .env
+.env.*
+!.env.example
+secrets.json
+**/Telegram/database/
+**/MessageCache/
+**/settings.json
 /release/

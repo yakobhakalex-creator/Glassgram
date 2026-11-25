@@ -13,6 +13,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\Glassgram.ico</ApplicationIcon>
     <Version>0.6.1</Version>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
