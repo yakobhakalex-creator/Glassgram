@@ -15,6 +15,7 @@ public partial class MainWindow
     private readonly ObservableCollection<MessageRow> visibleMessages = [];
     private readonly Dictionary<long, ChatHistory> histories = [];
     private readonly Dictionary<long, double> scrollPositions = [];
+    private readonly Dictionary<long, int> historyDepths = [];
     private readonly Dictionary<int, long> avatarFiles = [];
     private readonly Dictionary<long, string> userStatuses = [];
     private readonly Dictionary<long, long> lastMarkedRead = [];
@@ -29,6 +30,7 @@ public partial class MainWindow
     private bool messageSending;
     private long chatOpenVersion;
     private bool resizingChats;
+    private int historyRestores;
     private double resizeStartX;
     private double resizeStartWidth;
     private DateTime lastTypingSent;
@@ -64,6 +66,8 @@ public partial class MainWindow
         visibleChats.Clear();
         visibleMessages.Clear();
         histories.Clear();
+        scrollPositions.Clear();
+        historyDepths.Clear();
         avatarFiles.Clear();
         lastMarkedRead.Clear();
         MessageActions.Visibility = Visibility.Collapsed;
@@ -213,7 +217,24 @@ public partial class MainWindow
             {
                 history = new ChatHistory();
                 histories[chatId] = history;
-                await LoadHistoryAsync(chatId, history, initial: true);
+                var hasSavedPosition = scrollPositions.TryGetValue(chatId, out var savedOffset);
+                historyRestores++;
+                try
+                {
+                    await LoadHistoryAsync(chatId, history, initial: true);
+                    if (historyDepths.TryGetValue(chatId, out var depth))
+                    {
+                        while (version == chatOpenVersion && activeChat?.Id == chatId && history.HasMore && history.Messages.Count < depth)
+                        {
+                            var before = history.Messages.Count;
+                            await LoadHistoryAsync(chatId, history);
+                            if (history.Messages.Count == before) break;
+                        }
+                    }
+                    if (version == chatOpenVersion && activeChat?.Id == chatId && hasSavedPosition)
+                        messageScroller?.ChangeView(null, savedOffset, null, true);
+                }
+                finally { historyRestores--; }
             }
             else
             {
@@ -315,7 +336,10 @@ public partial class MainWindow
     private void TrimHistoryCache()
     {
         foreach (var old in histories.Where(h => h.Key != activeChat?.Id).OrderByDescending(h => h.Value.LastUsed).Skip(4).ToArray())
+        {
+            historyDepths[old.Key] = old.Value.Messages.Count;
             histories.Remove(old.Key);
+        }
     }
 
     private static ScrollViewer? FindScrollViewer(DependencyObject root)
@@ -337,7 +361,7 @@ public partial class MainWindow
 
     private async void MessageScrollChanged(object? sender, ScrollViewerViewChangedEventArgs args)
     {
-        if (activeChat is null || messageScroller is null || !histories.TryGetValue(activeChat.Id, out var history)) return;
+        if (historyRestores > 0 || activeChat is null || messageScroller is null || !histories.TryGetValue(activeChat.Id, out var history)) return;
         scrollPositions[activeChat.Id] = messageScroller.VerticalOffset;
         if (messageScroller.VerticalOffset < 80 && history.HasMore && !history.Loading)
             await LoadHistoryAsync(activeChat.Id, history);
