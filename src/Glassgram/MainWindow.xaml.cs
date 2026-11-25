@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
 using Windows.Storage.Pickers;
+using Glassgram.Controls;
 
 namespace Glassgram;
 
@@ -295,7 +296,7 @@ public partial class MainWindow : Window
         {
             try
             {
-                Root.Background = new ImageBrush { ImageSource = new BitmapImage(new Uri(wallpaperPath)), Stretch = Stretch.UniformToFill };
+                WallpaperLayer.Source = new BitmapImage(new Uri(wallpaperPath));
                 sampled = await SampleWallpaperColorAsync(wallpaperPath);
                 currentWallpaperPath = wallpaperPath;
                 WallpaperStatus.Text = Path.GetFileName(wallpaperPath);
@@ -307,6 +308,7 @@ public partial class MainWindow : Window
         }
         else
         {
+            WallpaperLayer.Source = null;
             Root.Background = WallpaperBrush(preferences.Wallpaper, lightTheme);
             currentWallpaperPath = "";
             WallpaperStatus.Text = preferences.AdaptiveWallpaper ? "Обои Windows не найдены — используется резервный фон" : "Встроенный фон";
@@ -317,13 +319,16 @@ public partial class MainWindow : Window
         var conversationTint = lightTheme ? Windows.UI.Color.FromArgb((byte)(opacity * .82), 225, 239, 248) : Windows.UI.Color.FromArgb((byte)(opacity * .72), 18, 31, 45);
         if (sampled is Windows.UI.Color wall)
             conversationTint = Windows.UI.Color.FromArgb((byte)(opacity * .72), (byte)((wall.R + tint.R) / 2), (byte)((wall.G + tint.G) / 2), (byte)((wall.B + tint.B) / 2));
-        var panel = new SolidColorBrush(tint);
-        ChatListPanel.Background = panel;
-        MessagesPanel.Background = new SolidColorBrush(conversationTint);
-        ConversationHeader.Background = new SolidColorBrush(tint);
-        ComposerPanel.Background = new SolidColorBrush(tint);
-        Navigation.Background = new SolidColorBrush(Windows.UI.Color.FromArgb((byte)(opacity * .72), tint.R, tint.G, tint.B));
-        SettingsGlassPanel.Background = new SolidColorBrush(Windows.UI.Color.FromArgb((byte)Math.Max(135, (int)opacity), tint.R, tint.G, tint.B));
+        Root.Background = WallpaperLayer.Source is null ? WallpaperBrush(preferences.Wallpaper, lightTheme) : new SolidColorBrush(Windows.UI.Color.FromArgb(255, 10, 18, 28));
+        var glassOpacity = Math.Clamp(0.48 + (100 - preferences.Transparency) / 240d, 0.48, 0.88);
+        foreach (var glass in new GlassPanel[] { ChatListPanel, MessagesPanel, ConversationHeader, SettingsGlassPanel }) glass.GlassOpacity = glassOpacity;
+        WallpaperVeil.Opacity = preferences.LiquidGlass ? Math.Clamp(0.10 + (100 - preferences.GlassSaturation) / 300d, 0.10, 0.36) : 0.42;
+        Navigation.Background = preferences.LiquidGlass
+            ? new AcrylicBrush { TintColor = tint, TintOpacity = Math.Clamp(glassOpacity, .55, .88), TintLuminosityOpacity = Math.Clamp(.16 + preferences.BlurIntensity / 250d, .16, .56), FallbackColor = tint }
+            : new SolidColorBrush(tint);
+        ComposerPanel.Background = preferences.LiquidGlass
+            ? new AcrylicBrush { TintColor = tint, TintOpacity = Math.Clamp(glassOpacity, .58, .9), TintLuminosityOpacity = .32, FallbackColor = tint }
+            : new SolidColorBrush(tint);
         BrandPanel.Background = new SolidColorBrush(Windows.UI.Color.FromArgb((byte)Math.Min(170, (int)opacity), 255, 255, 255));
         var highlight = preferences.LiquidGlass ? (byte)Math.Clamp(25 + preferences.BlurIntensity * .7, 25, 95) : (byte)30;
         ChatListPanel.BorderBrush = MessagesPanel.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(highlight, 255, 255, 255));
