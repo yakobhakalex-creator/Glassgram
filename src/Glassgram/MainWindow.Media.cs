@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.Web.WebView2.Core;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Media.Core;
 using Windows.Media.Playback;
@@ -351,6 +352,44 @@ public partial class MainWindow
         var player = element.MediaPlayer;
         element.SetMediaPlayer(null);
         player?.Dispose();
+    }
+
+    private async void InlineWebmLoaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is not WebView2 web || web.DataContext is not MessageRow row) return;
+        try
+        {
+            if (row.MediaPath.Length == 0) await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
+            if (row.MediaPath.Length == 0 || !ReferenceEquals(web.DataContext, row)) return;
+            await web.EnsureCoreWebView2Async();
+            var folder = Path.GetDirectoryName(row.MediaPath) ?? throw new IOException("Папка WEBM не найдена.");
+            web.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                "glassgram.media", folder, CoreWebView2HostResourceAccessKind.DenyCors);
+            var fileName = Uri.EscapeDataString(Path.GetFileName(row.MediaPath));
+            web.NavigationCompleted += async (_, completed) =>
+            {
+                if (!completed.IsSuccess || !ReferenceEquals(web.DataContext, row)) return;
+                if (FindAncestor<Grid>(web)?.Children.OfType<Image>().FirstOrDefault() is { } preview)
+                    preview.Visibility = Visibility.Collapsed;
+                await web.ExecuteScriptAsync("document.querySelector('video')?.play()");
+            };
+            web.NavigateToString($$"""
+                <!doctype html><html><head><meta charset="utf-8"><style>
+                html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
+                video{width:100%;height:100%;object-fit:contain;background:transparent}
+                </style></head><body><video src="https://glassgram.media/{{fileName}}"
+                autoplay loop muted playsinline></video></body></html>
+                """);
+        }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException or TimeoutException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        {
+            if (!lifetime.IsCancellationRequested) row.SetTransferError("Ошибка WEBM: " + ex.Message);
+        }
+    }
+
+    private void InlineWebmUnloaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is WebView2 { CoreWebView2: { } core }) core.Navigate("about:blank");
     }
 
     private async void InlineTgsLoaded(object sender, RoutedEventArgs args)

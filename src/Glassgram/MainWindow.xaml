@@ -143,7 +143,7 @@
                           </Grid>
                           <Grid Visibility="{Binding InlineVideoVisibility}" Width="240" Height="240" HorizontalAlignment="Left">
                             <Image Source="{Binding MediaPreview}" Stretch="Uniform" Opacity="0.9"/>
-                            <MediaPlayerElement AreTransportControlsEnabled="False" AutoPlay="False" Stretch="Uniform" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Loaded="InlineVideoLoaded" Unloaded="InlineVideoUnloaded"/>
+                            <WebView2 HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Loaded="InlineWebmLoaded" Unloaded="InlineWebmUnloaded"/>
                           </Grid>
                           <Grid Visibility="{Binding TgsVisibility}" Width="240" Height="240" HorizontalAlignment="Left">
                             <Image Source="{Binding MediaPreview}" Stretch="Uniform" Opacity="0.9"/>
