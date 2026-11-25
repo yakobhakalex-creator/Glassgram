@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Text.Json;
 using CommunityToolkit.WinUI.Lottie;
 using Glassgram.Telegram;
 using Microsoft.UI.Windowing;
@@ -21,6 +22,7 @@ namespace Glassgram;
 public partial class MainWindow
 {
     private readonly List<Window> mediaWindows = [];
+    private readonly Dictionary<int, TaskCompletionSource<JsonElement>> mediaDownloadWaiters = [];
     private static readonly SemaphoreSlim TgsCacheGate = new(1, 1);
     private static readonly string MediaCacheRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Glassgram", "MediaCache");
@@ -44,16 +46,61 @@ public partial class MainWindow
         catch (Exception ex) when (ex is TdException or OperationCanceledException) { }
     }
 
-    private async Task DownloadMessageFileAsync(MessageRow row, int fileId, bool synchronous)
+    private async Task<string> DownloadMessageFileAsync(MessageRow row, int fileId, bool waitForCompletion)
     {
-        if (telegram is null || fileId == 0) return;
+        if (telegram is null) throw new InvalidOperationException("TDLib не подключена.");
+        if (fileId == 0) throw new InvalidOperationException("TDLib вернула пустой file_id.");
         RegisterMessageFiles(row);
+        if (row.IsDownloadCompleted && row.MediaPath.Length > 0 && File.Exists(row.MediaPath)) return row.MediaPath;
+        var ownsWaiter = !mediaDownloadWaiters.TryGetValue(fileId, out var waiter);
+        if (ownsWaiter)
+        {
+            waiter = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+            mediaDownloadWaiters[fileId] = waiter;
+        }
         var file = await telegram.RequestAsync(new
         {
-            @type = "downloadFile", file_id = fileId, priority = synchronous ? 32 : 2,
-            offset = 0, limit = 0, synchronous
+            @type = "downloadFile", file_id = fileId, priority = waitForCompletion ? 32 : 2,
+            offset = 0, limit = 0, synchronous = false
         }, lifetime.Token);
         row.ApplyFile(file);
+        NotifyMediaFileUpdate(file);
+        if (!waitForCompletion) return "";
+        MessengerStatus.Text = $"TDLib загружает файл {fileId}…";
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+            timeout.CancelAfter(TimeSpan.FromMinutes(10));
+            var completed = IsTdFileReady(file) ? file : await waiter!.Task.WaitAsync(timeout.Token);
+            var path = completed.Field("local").Field("path").Text();
+            if (!completed.Field("local").Field("is_downloading_completed").Flag())
+                throw new IOException($"TDLib не завершила загрузку file_id={fileId}.");
+            if (path.Length == 0) throw new IOException($"TDLib завершила загрузку file_id={fileId}, но local.path пуст.");
+            if (!File.Exists(path)) throw new FileNotFoundException($"TDLib указала local.path, но файла нет на диске: {path}", path);
+            row.ApplyFile(completed);
+            MessengerStatus.Text = "";
+            return path;
+        }
+        catch (OperationCanceledException) when (!lifetime.IsCancellationRequested)
+        {
+            throw new TimeoutException($"TDLib не завершила загрузку file_id={fileId} за 10 минут.");
+        }
+        finally
+        {
+            if (ownsWaiter && mediaDownloadWaiters.TryGetValue(fileId, out var current) && ReferenceEquals(current, waiter)) mediaDownloadWaiters.Remove(fileId);
+        }
+    }
+
+    private static bool IsTdFileReady(JsonElement file) => file.Field("local").Field("is_downloading_completed").Flag();
+
+    private void NotifyMediaFileUpdate(JsonElement file)
+    {
+        var fileId = (int)file.Field("id").Number();
+        if (fileId == 0 || !mediaDownloadWaiters.TryGetValue(fileId, out var waiter)) return;
+        var local = file.Field("local");
+        if (local.Field("is_downloading_completed").Flag()) waiter.TrySetResult(file.Clone());
+        else if (!local.Field("can_be_downloaded").Flag() && !local.Field("is_downloading_active").Flag())
+            waiter.TrySetException(new IOException($"TDLib не может скачать file_id={fileId}. local.path='{local.Field("path").Text()}'."));
     }
 
     private async void OpenMessageMedia(object sender, TappedRoutedEventArgs args)
@@ -62,12 +109,12 @@ public partial class MainWindow
         try
         {
             if (row.MediaPath.Length == 0) await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
-            if (row.MediaPath.Length == 0) return;
+            if (row.MediaPath.Length == 0) throw new FileNotFoundException($"Файл file_id={row.PrimaryFileId} не готов.");
             if (row.TgsVisibility == Visibility.Visible) await OpenTgsViewerAsync(row);
             else if (row.MediaKind == "video" || row.InlineVideoVisibility == Visibility.Visible) OpenVideoViewer(row.MediaPath, row.FileName);
             else OpenImageViewer(row.MediaPath, row.FileName);
         }
-        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException)
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or TimeoutException or InvalidOperationException)
         {
             MessengerStatus.Text = "Не удалось открыть медиа. " + ex.Message;
         }
@@ -79,11 +126,11 @@ public partial class MainWindow
         try
         {
             if (row.MediaPath.Length == 0) await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
-            if (row.MediaPath.Length == 0) return;
+            if (row.MediaPath.Length == 0) throw new FileNotFoundException($"Файл file_id={row.PrimaryFileId} не готов.");
             var file = await StorageFile.GetFileFromPathAsync(row.MediaPath);
             await Launcher.LaunchFileAsync(file);
         }
-        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException or TimeoutException or InvalidOperationException)
         {
             MessengerStatus.Text = "Не удалось открыть файл. " + ex.Message;
         }
@@ -114,22 +161,15 @@ public partial class MainWindow
         playButton.IsEnabled = false;
         try
         {
-            await DownloadMessageFileAsync(row, row.PrimaryFileId, false);
-            for (var attempt = 0; attempt < 40 && (row.MediaPath.Length == 0 || !File.Exists(row.MediaPath)); attempt++)
-                await Task.Delay(125, lifetime.Token);
-            if (row.MediaPath.Length == 0 || !File.Exists(row.MediaPath))
-            {
-                await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
-                if (row.MediaPath.Length == 0) return;
-            }
-            var player = new MediaPlayer { Source = MediaSource.CreateFromUri(new Uri(row.MediaPath)), AutoPlay = true };
+            var path = await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
+            var player = new MediaPlayer { Source = MediaSource.CreateFromUri(new Uri(path)), AutoPlay = true };
             playerElement.SetMediaPlayer(player);
             playerElement.Visibility = Visibility.Visible;
             if (preview is not null) preview.Visibility = Visibility.Collapsed;
             playButton.Visibility = Visibility.Collapsed;
             player.MediaFailed += (_, eventArgs) => DispatcherQueue.TryEnqueue(() => MessengerStatus.Text = "Видео не воспроизводится. " + eventArgs.ErrorMessage);
         }
-        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException)
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or TimeoutException or InvalidOperationException)
         {
             if (!lifetime.IsCancellationRequested) MessengerStatus.Text = "Не удалось запустить видео. " + ex.Message;
         }
@@ -141,18 +181,17 @@ public partial class MainWindow
         if ((sender as FrameworkElement)?.DataContext is not MessageRow row || row.PrimaryFileId == 0) return;
         try
         {
-            await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
-            if (row.MediaPath.Length == 0) return;
+            var downloadedPath = await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
             var picker = new FileSavePicker { SuggestedFileName = row.FileName.Length > 0 ? row.FileName : "video.mp4" };
-            picker.FileTypeChoices.Add("Видео", new[] { Path.GetExtension(row.MediaPath) is { Length: > 1 } extension ? extension : ".mp4" });
+            picker.FileTypeChoices.Add("Видео", new[] { Path.GetExtension(downloadedPath) is { Length: > 1 } extension ? extension : ".mp4" });
             WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
             var destination = await picker.PickSaveFileAsync();
             if (destination is null) return;
-            var source = await StorageFile.GetFileFromPathAsync(row.MediaPath);
+            var source = await StorageFile.GetFileFromPathAsync(downloadedPath);
             await source.CopyAndReplaceAsync(destination);
             MessengerStatus.Text = "Оригинал сохранён.";
         }
-        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException or TimeoutException or InvalidOperationException)
         {
             if (!lifetime.IsCancellationRequested) MessengerStatus.Text = "Не удалось сохранить видео. " + ex.Message;
         }

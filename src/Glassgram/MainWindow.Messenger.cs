@@ -133,7 +133,7 @@ public partial class MainWindow
         if (!knownChats.TryGetValue(id, out var row)) knownChats[id] = row = new ChatRow(id);
         row.IsSaved |= saved || id == savedChatId;
         row.Update(chat);
-        if (sourceList is not null) row.ApplyList(sourceList, order: chat.Field("last_message").Field("date").Number());
+        if (sourceList is not null && row.GetOrder(sourceList) == 0) row.ApplyList(sourceList);
         if (row.PhotoFileId != 0 && row.Avatar is null)
         {
             avatarFiles[row.PhotoFileId] = id;
@@ -161,11 +161,9 @@ public partial class MainWindow
         var selected = activeChat?.Id;
         var query = ChatSearch.Text.Trim();
         var rows = knownChats.Values
-            .Where(c => showingArchive ? c.IsArchive || c.IsSaved : c.IsMain || c.IsSaved)
+            .Where(c => showingArchive ? c.IsArchive : c.IsMain)
             .Where(c => query.Length == 0 || c.Title.Contains(query, StringComparison.CurrentCultureIgnoreCase))
-            .OrderByDescending(c => c.IsSaved)
-            .ThenByDescending(c => c.IsMain)
-            .ThenByDescending(c => c.Order)
+            .OrderByDescending(c => c.GetOrder(showingArchive ? "chatListArchive" : "chatListMain"))
             .ToArray();
         if (rows.Length == visibleChats.Count && rows.SequenceEqual(visibleChats)) return;
         visibleChats.Clear();

@@ -61,7 +61,8 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
     public int UnreadCount { get; private set; }
     public string AvatarLetter => Title.Length > 0 ? Title[..1].ToUpperInvariant() : "•";
     public ImageSource? Avatar { get; private set; }
-    public long Order { get; private set; }
+    private readonly Dictionary<string, long> listOrders = [];
+    public long Order => GetOrder("chatListMain");
     public bool IsMain { get; private set; }
     public bool IsArchive { get; private set; }
     public bool IsSaved { get; set; }
@@ -95,18 +96,14 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
             CanSendVideos = permissions.Field("can_send_videos").Flag();
             CanSendDocuments = permissions.Field("can_send_documents").Flag();
         }
-        Order = Math.Max(Order, chat.Field("last_message").Field("date").Number());
-        foreach (var list in chat.Field("chat_lists").Items())
-        {
-            if (list.Field("@type").Text() == "chatListMain") IsMain = true;
-            if (list.Field("@type").Text() == "chatListArchive") IsArchive = true;
-        }
+        listOrders.Clear();
+        IsMain = false;
+        IsArchive = false;
         foreach (var position in chat.Field("positions").Items())
         {
             var list = position.Field("list").Field("@type").Text();
             var order = position.Field("order").Number();
-            if (list == "chatListMain") { IsMain = order != 0; Order = Math.Max(Order, order); }
-            if (list == "chatListArchive") { IsArchive = order != 0; Order = Math.Max(Order, order); }
+            ApplyList(list, order != 0, order);
         }
         var small = chat.Field("photo").Field("small");
         PhotoFileId = (int)small.Field("id").Number();
@@ -118,8 +115,11 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
     {
         if (listType == "chatListMain") IsMain = present;
         if (listType == "chatListArchive") IsArchive = present;
-        if (present) Order = Math.Max(Order, order);
+        if (present && order != 0) listOrders[listType] = order;
+        else listOrders.Remove(listType);
     }
+
+    public long GetOrder(string listType) => listOrders.GetValueOrDefault(listType);
 
     public void SetAvatar(string path)
     {
@@ -160,6 +160,9 @@ internal sealed class MessageRow : INotifyPropertyChanged
     public long FileSize { get; private set; }
     public double TransferProgress { get; private set; }
     public string TransferText { get; private set; } = "";
+    public bool IsDownloadCompleted { get; private set; }
+    public bool IsDownloadingActive { get; private set; }
+    public bool CanBeDownloaded { get; private set; } = true;
     public ImageSource? MediaPreview { get; private set; }
     public string PrimaryLink => LinkPattern.Match(Text) is { Success: true } match ? match.Value : "";
     public Visibility LinkVisibility => PrimaryLink.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -268,14 +271,12 @@ internal sealed class MessageRow : INotifyPropertyChanged
         {
             PrimaryFileId = id;
             FileSize = file.Field("size").Number();
-            MediaPath = file.Field("local").Field("path").Text();
         }
         else
         {
             PreviewFileId = id;
-            PreviewPath = file.Field("local").Field("path").Text();
         }
-        RefreshMediaPreview();
+        ApplyFile(file);
     }
 
     public void ApplyFile(JsonElement file)
@@ -283,14 +284,19 @@ internal sealed class MessageRow : INotifyPropertyChanged
         var id = (int)file.Field("id").Number();
         var local = file.Field("local");
         var path = local.Field("path").Text();
-        if (id == PrimaryFileId && path.Length > 0) MediaPath = path;
-        if (id == PreviewFileId && path.Length > 0) PreviewPath = path;
+        var completed = local.Field("is_downloading_completed").Flag();
+        if (id == PrimaryFileId && completed && path.Length > 0 && File.Exists(path)) MediaPath = path;
+        if (id == PreviewFileId && completed && path.Length > 0 && File.Exists(path)) PreviewPath = path;
         if (id == PrimaryFileId)
         {
             var expected = Math.Max(1, file.Field("expected_size").Number());
             var downloaded = local.Field("downloaded_size").Number();
+            IsDownloadCompleted = completed;
+            IsDownloadingActive = local.Field("is_downloading_active").Flag();
+            CanBeDownloaded = local.Field("can_be_downloaded").Flag();
             TransferProgress = Math.Clamp(downloaded * 100d / expected, 0, 100);
-            TransferText = local.Field("is_downloading_active").Flag() ? $"Загрузка {TransferProgress:0}%" : "";
+            TransferText = completed ? "Загрузка завершена" : IsDownloadingActive ? $"Загрузка {TransferProgress:0}%" : CanBeDownloaded ? "Ожидание загрузки…" : "TDLib не может скачать файл";
+            if (completed && (path.Length == 0 || !File.Exists(path))) TransferText = "TDLib завершил загрузку, но файл отсутствует на диске";
         }
         RefreshMediaPreview();
         RaiseMedia();
@@ -306,7 +312,7 @@ internal sealed class MessageRow : INotifyPropertyChanged
 
     private void RaiseMedia()
     {
-        foreach (var name in new[] { nameof(MediaPreview), nameof(MediaPath), nameof(PreviewPath), nameof(TransferProgress), nameof(TransferText), nameof(TransferVisibility), nameof(FileSizeText) })
+        foreach (var name in new[] { nameof(MediaPreview), nameof(MediaPath), nameof(PreviewPath), nameof(TransferProgress), nameof(TransferText), nameof(TransferVisibility), nameof(FileSizeText), nameof(IsDownloadCompleted), nameof(IsDownloadingActive), nameof(CanBeDownloaded) })
             PropertyChanged?.Invoke(this, new(name));
     }
 

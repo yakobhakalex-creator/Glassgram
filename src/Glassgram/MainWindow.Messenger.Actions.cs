@@ -28,6 +28,12 @@ public partial class MainWindow
             case "updateChatReadInbox":
             case "updateChatReadOutbox":
             case "updateChatIsMarkedAsUnread":
+            case "updateChatUnreadMentionCount":
+            case "updateChatUnreadReactionCount":
+            case "updateChatDraftMessage":
+            case "updateChatNotificationSettings":
+            case "updateChatAvailableReactions":
+            case "updateChatPermissions":
                 _ = RefreshChatAsync(chatId);
                 break;
             case "updateChatPosition":
@@ -55,6 +61,7 @@ public partial class MainWindow
                 break;
             case "updateFile":
                 UpdateAvatar(update.Field("file"));
+                NotifyMediaFileUpdate(update.Field("file"));
                 break;
             case "updateUserStatus":
                 UpdateUserStatus(update);
