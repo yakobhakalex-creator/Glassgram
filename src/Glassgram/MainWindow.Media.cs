@@ -318,14 +318,44 @@ public partial class MainWindow
         {
             if (row.MediaPath.Length == 0) await DownloadMessageFileAsync(row, row.PrimaryFileId, true);
             if (row.MediaPath.Length == 0) return;
-            element.Source = MediaSource.CreateFromUri(new Uri(row.MediaPath));
-            if (element.MediaPlayer is not null)
+            var file = await StorageFile.GetFileFromPathAsync(row.MediaPath);
+            var player = new MediaPlayer
             {
-                element.MediaPlayer.IsMuted = true;
-                element.MediaPlayer.IsLoopingEnabled = true;
-            }
+                Source = MediaSource.CreateFromStorageFile(file),
+                AutoPlay = true,
+                IsMuted = true,
+                IsLoopingEnabled = true
+            };
+            element.SetMediaPlayer(player);
+            player.Play();
         }
-        catch (Exception ex) when (ex is TdException or OperationCanceledException) { }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException or TimeoutException or InvalidOperationException)
+        {
+            if (!lifetime.IsCancellationRequested) row.SetTransferError("Ошибка анимации: " + ex.Message);
+        }
+    }
+
+    private void InlineVideoUnloaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is not MediaPlayerElement element) return;
+        var player = element.MediaPlayer;
+        element.SetMediaPlayer(null);
+        player?.Dispose();
+    }
+
+    private async void InlineTgsLoaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is not AnimatedVisualPlayer player || player.DataContext is not MessageRow row) return;
+        try { await LoadTgsAsync(player, row); }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException or TimeoutException or InvalidOperationException)
+        {
+            if (!lifetime.IsCancellationRequested) row.SetTransferError("Ошибка анимации: " + ex.Message);
+        }
+    }
+
+    private void InlineTgsUnloaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is AnimatedVisualPlayer player) player.Stop();
     }
 
     private async void OpenMessageLink(object sender, RoutedEventArgs args)
