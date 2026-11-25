@@ -24,6 +24,8 @@ public partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1180, 780));
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Glassgram.ico");
+        if (File.Exists(iconPath)) AppWindow.SetIcon(iconPath);
         try
         {
             if (File.Exists(settingsPath))
