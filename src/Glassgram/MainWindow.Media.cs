@@ -322,12 +322,21 @@ public partial class MainWindow
             var player = new MediaPlayer
             {
                 Source = MediaSource.CreateFromStorageFile(file),
-                AutoPlay = true,
+                AutoPlay = false,
                 IsMuted = true,
                 IsLoopingEnabled = true
             };
+            player.MediaOpened += (_, _) => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!ReferenceEquals(element.DataContext, row)) return;
+                if (FindAncestor<Grid>(element)?.Children.OfType<Image>().FirstOrDefault() is { } preview)
+                    preview.Visibility = Visibility.Collapsed;
+                player.Play();
+            });
+            player.MediaFailed += (_, eventArgs) => DispatcherQueue.TryEnqueue(() =>
+                row.SetTransferError("Ошибка анимации: " + eventArgs.ErrorMessage));
+            if (!ReferenceEquals(element.DataContext, row)) { player.Dispose(); return; }
             element.SetMediaPlayer(player);
-            player.Play();
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException or TimeoutException or InvalidOperationException)
         {
@@ -346,7 +355,13 @@ public partial class MainWindow
     private async void InlineTgsLoaded(object sender, RoutedEventArgs args)
     {
         if (sender is not AnimatedVisualPlayer player || player.DataContext is not MessageRow row) return;
-        try { await LoadTgsAsync(player, row); }
+        try
+        {
+            await LoadTgsAsync(player, row);
+            if (!ReferenceEquals(player.DataContext, row)) { player.Stop(); return; }
+            if (FindAncestor<Grid>(player)?.Children.OfType<Image>().FirstOrDefault() is { } preview)
+                preview.Visibility = Visibility.Collapsed;
+        }
         catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException or TimeoutException or InvalidOperationException)
         {
             if (!lifetime.IsCancellationRequested) row.SetTransferError("Ошибка анимации: " + ex.Message);

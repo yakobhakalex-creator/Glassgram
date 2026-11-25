@@ -141,8 +141,14 @@
                             <Button Content="▶" FontSize="26" Width="58" Height="58" CornerRadius="29" HorizontalAlignment="Center" VerticalAlignment="Center" Click="PlayInlineVideo"/>
                             <Button Content="Скачать оригинал" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Click="SaveOriginalVideo"/>
                           </Grid>
-                          <MediaPlayerElement Visibility="{Binding InlineVideoVisibility}" Width="256" Height="256" AreTransportControlsEnabled="False" AutoPlay="True" IsFullWindow="False" Stretch="Uniform" Loaded="InlineVideoLoaded" Unloaded="InlineVideoUnloaded"/>
-                          <AnimatedVisualPlayer Visibility="{Binding TgsVisibility}" Width="256" Height="256" AutoPlay="True" Stretch="Uniform" Loaded="InlineTgsLoaded" Unloaded="InlineTgsUnloaded"/>
+                          <Grid Visibility="{Binding InlineVideoVisibility}" Width="240" Height="240" HorizontalAlignment="Left">
+                            <Image Source="{Binding MediaPreview}" Stretch="Uniform" Opacity="0.9"/>
+                            <MediaPlayerElement AreTransportControlsEnabled="False" AutoPlay="False" Stretch="Uniform" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Loaded="InlineVideoLoaded" Unloaded="InlineVideoUnloaded"/>
+                          </Grid>
+                          <Grid Visibility="{Binding TgsVisibility}" Width="240" Height="240" HorizontalAlignment="Left">
+                            <Image Source="{Binding MediaPreview}" Stretch="Uniform" Opacity="0.9"/>
+                            <AnimatedVisualPlayer AutoPlay="False" Stretch="Uniform" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Loaded="InlineTgsLoaded" Unloaded="InlineTgsUnloaded"/>
+                          </Grid>
                           <StackPanel Visibility="{Binding DocumentVisibility}" Orientation="Horizontal" Spacing="10">
                             <FontIcon Glyph="&#xE8A5;" FontSize="28" VerticalAlignment="Center"/>
                             <StackPanel VerticalAlignment="Center" MaxWidth="320">
