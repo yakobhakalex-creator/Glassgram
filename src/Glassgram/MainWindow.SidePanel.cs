@@ -175,9 +175,10 @@ public partial class MainWindow
         if (args.ClickedItem is not StickerPanelItem sticker || telegram is null || activeChat is null) return;
         try
         {
-            var inputFile = sticker.RemoteId.Length > 0
-                ? new Dictionary<string, object?> { ["@type"] = "inputFileRemote", ["id"] = sticker.RemoteId }
-                : new Dictionary<string, object?> { ["@type"] = "inputFileId", ["id"] = sticker.FileId };
+            var downloaded = await telegram.RequestAsync(new { @type = "downloadFile", file_id = sticker.FileId, priority = 32, offset = 0, limit = 0, synchronous = true }, lifetime.Token);
+            var path = downloaded.Field("local").Field("path").Text();
+            if (path.Length == 0 || !File.Exists(path)) throw new IOException("TDLib не загрузила оригинал стикера.");
+            var inputFile = new Dictionary<string, object?> { ["@type"] = "inputFileLocal", ["path"] = path };
             var content = new Dictionary<string, object?>
             {
                 ["@type"] = "inputMessageSticker",
@@ -191,7 +192,7 @@ public partial class MainWindow
             }, lifetime.Token);
             InsertMessage(message);
         }
-        catch (Exception ex) when (ex is TdException or OperationCanceledException) { MessengerStatus.Text = "Стикер не отправлен. " + ex.Message; }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException) { MessengerStatus.Text = "Стикер не отправлен. " + ex.Message; }
     }
 }
 
