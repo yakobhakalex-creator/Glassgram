@@ -71,7 +71,7 @@
         </Grid>
         <Grid x:Name="ChatsPage" ColumnSpacing="0">
           <Grid.ColumnDefinitions><ColumnDefinition x:Name="ChatColumn" Width="340" MinWidth="250"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-          <controls:GlassPanel x:Name="ChatListPanel" CornerRadius="28" BorderBrush="#66FFFFFF" BorderThickness="1" Padding="10">
+          <controls:GlassPanel x:Name="ChatListPanel" CornerRadius="28" BorderBrush="#66FFFFFF" BorderThickness="1" Padding="10" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
             <Grid RowSpacing="8"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
               <TextBlock Text="Чаты" FontSize="25" FontWeight="SemiBold" Margin="10,5,8,0"/>
               <TextBox x:Name="ChatSearch" Grid.Row="1" PlaceholderText="Поиск в Glassgram" TextChanged="SearchChats"/>

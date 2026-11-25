@@ -117,23 +117,27 @@ public partial class MainWindow
                 if (knownChats.TryGetValue(chatId, out var existing))
                 {
                     var refreshed = await client.RequestAsync(new { @type = "getChat", chat_id = chatId }, lifetime.Token);
-                    UpsertChat(refreshed, saved: existing.IsSaved);
+                    UpsertChat(refreshed, saved: existing.IsSaved, sourceList: listType);
                     continue;
                 }
                 var chat = await client.RequestAsync(new { @type = "getChat", chat_id = chatId }, lifetime.Token);
-                UpsertChat(chat);
+                UpsertChat(chat, sourceList: listType);
             }
             if (loadedAll) break;
         }
     }
 
-    private void UpsertChat(JsonElement chat, bool saved = false)
+    private void UpsertChat(JsonElement chat, bool saved = false, string? sourceList = null)
     {
         var id = chat.Field("id").Number();
         if (id == 0) return;
         if (!knownChats.TryGetValue(id, out var row)) knownChats[id] = row = new ChatRow(id);
         row.IsSaved |= saved || id == savedChatId;
         row.Update(chat);
+        // TDLib can return a chat before its position update has reached this client.
+        // Preserve the list that enumerated it until the authoritative position arrives.
+        if (sourceList is "chatListMain" && !row.IsMain) row.ApplyList(sourceList);
+        if (sourceList is "chatListArchive" && !row.IsArchive) row.ApplyList(sourceList);
         if (row.PhotoFileId != 0 && row.Avatar is null)
         {
             avatarFiles[row.PhotoFileId] = id;
