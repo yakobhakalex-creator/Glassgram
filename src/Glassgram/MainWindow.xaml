@@ -189,10 +189,10 @@
                   <TextBlock x:Name="ComposeContextText" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                   <Button Content="Отмена" Click="CancelMessageAction"/>
                 </StackPanel>
-                <Button x:Name="AttachButton" Grid.Row="1" Content="&#xE723;" FontFamily="Segoe Fluent Icons" Width="36" Height="36" Click="PickAttachment" VerticalAlignment="Bottom" ToolTipService.ToolTip="Прикрепить файл"/>
-                <Button x:Name="StickerButton" Grid.Row="1" Grid.Column="1" Content="☺" Width="36" Height="36" Click="OpenStickerPanel" VerticalAlignment="Bottom" ToolTipService.ToolTip="Стикеры"/>
+                <Button x:Name="AttachButton" Grid.Row="1" Width="36" Height="36" Click="PickAttachment" VerticalAlignment="Bottom" ToolTipService.ToolTip="Прикрепить файл"><FontIcon Glyph="&#xE723;" FontSize="16"/></Button>
+                <Button x:Name="StickerButton" Grid.Row="1" Grid.Column="1" Width="36" Height="36" Click="OpenStickerPanel" VerticalAlignment="Bottom" ToolTipService.ToolTip="Стикеры"><FontIcon Glyph="&#xE899;" FontSize="17"/></Button>
                 <TextBox x:Name="MessageInput" Grid.Row="1" Grid.Column="2" PlaceholderText="Сообщение" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="36" MaxHeight="104" Padding="10,5" VerticalContentAlignment="Center" ScrollViewer.HorizontalScrollMode="Disabled" TextChanged="MessageInputChanged" PreviewKeyDown="MessageInputPreviewKeyDown"/>
-                <Button x:Name="SendMessageButton" Grid.Row="1" Grid.Column="3" Content="&#xE724;" FontFamily="Segoe Fluent Icons" Width="38" Height="38" CornerRadius="19" Click="SendTelegramMessage" VerticalAlignment="Bottom" ToolTipService.ToolTip="Отправить"/>
+                <Button x:Name="SendMessageButton" Grid.Row="1" Grid.Column="3" Width="38" Height="38" CornerRadius="19" Click="SendTelegramMessage" VerticalAlignment="Bottom" ToolTipService.ToolTip="Отправить"><FontIcon Glyph="&#xE724;" FontSize="16"/></Button>
                 <TextBlock x:Name="MessengerStatus" Grid.Row="2" Grid.ColumnSpan="4" FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
               </Grid>
             </Grid>

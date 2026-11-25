@@ -167,7 +167,7 @@ public partial class MainWindow
         {
             try { preview = new BitmapImage(new Uri(path)); } catch (Exception ex) when (ex is ArgumentException or UriFormatException) { }
         }
-        return new StickerPanelItem(fileId, sticker.Field("emoji").Text(), (int)sticker.Field("width").Number(), (int)sticker.Field("height").Number(), preview);
+        return new StickerPanelItem(fileId, file.Field("remote").Field("id").Text(), sticker.Field("emoji").Text(), (int)sticker.Field("width").Number(), (int)sticker.Field("height").Number(), preview);
     }
 
     private async void SendSticker(object sender, ItemClickEventArgs args)
@@ -175,10 +175,13 @@ public partial class MainWindow
         if (args.ClickedItem is not StickerPanelItem sticker || telegram is null || activeChat is null) return;
         try
         {
+            var inputFile = sticker.RemoteId.Length > 0
+                ? new Dictionary<string, object?> { ["@type"] = "inputFileRemote", ["id"] = sticker.RemoteId }
+                : new Dictionary<string, object?> { ["@type"] = "inputFileId", ["id"] = sticker.FileId };
             var content = new Dictionary<string, object?>
             {
                 ["@type"] = "inputMessageSticker",
-                ["sticker"] = new Dictionary<string, object?> { ["@type"] = "inputFileId", ["id"] = sticker.FileId },
+                ["sticker"] = inputFile,
                 ["thumbnail"] = null, ["width"] = sticker.Width, ["height"] = sticker.Height, ["emoji"] = sticker.Emoji
             };
             var message = await telegram.RequestAsync(new
@@ -192,4 +195,4 @@ public partial class MainWindow
     }
 }
 
-internal sealed record StickerPanelItem(int FileId, string Emoji, int Width, int Height, ImageSource? Preview);
+internal sealed record StickerPanelItem(int FileId, string RemoteId, string Emoji, int Width, int Height, ImageSource? Preview);
