@@ -321,8 +321,7 @@ public partial class MainWindow
             var file = await StorageFile.GetFileFromPathAsync(row.MediaPath);
             var player = new MediaPlayer
             {
-                Source = MediaSource.CreateFromStorageFile(file),
-                AutoPlay = false,
+                AutoPlay = true,
                 IsMuted = true,
                 IsLoopingEnabled = true
             };
@@ -337,6 +336,8 @@ public partial class MainWindow
                 row.SetTransferError("Ошибка анимации: " + eventArgs.ErrorMessage));
             if (!ReferenceEquals(element.DataContext, row)) { player.Dispose(); return; }
             element.SetMediaPlayer(player);
+            player.Source = MediaSource.CreateFromStorageFile(file);
+            player.Play();
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or UnauthorizedAccessException or TimeoutException or InvalidOperationException)
         {
