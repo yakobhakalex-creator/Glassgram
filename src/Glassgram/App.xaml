@@ -24,5 +24,23 @@
       <Setter Property="CornerRadius" Value="14"/>
       <Setter Property="Padding" Value="6"/>
     </Style>
+    <Style TargetType="Button">
+      <Setter Property="CornerRadius" Value="18"/>
+      <Setter Property="Padding" Value="14,8"/>
+      <Setter Property="BorderBrush" Value="#52FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <Style TargetType="TextBox">
+      <Setter Property="CornerRadius" Value="18"/>
+      <Setter Property="BorderBrush" Value="#52FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <Style TargetType="ComboBox">
+      <Setter Property="CornerRadius" Value="16"/>
+    </Style>
+    <Style TargetType="ListViewItem">
+      <Setter Property="CornerRadius" Value="18"/>
+      <Setter Property="Margin" Value="0,2"/>
+    </Style>
   </ResourceDictionary></Application.Resources>
 </Application>

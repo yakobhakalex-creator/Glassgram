@@ -1,10 +1,16 @@
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Hosting;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Graphics.Imaging;
+using Windows.Storage;
+using Windows.Storage.Pickers;
 
 namespace Glassgram;
 
@@ -19,6 +25,9 @@ public partial class MainWindow : Window
     private bool agentBusy;
     private bool lightTheme;
     private bool applyingGlassSettings;
+    private readonly DispatcherTimer wallpaperTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+    private string currentWallpaperPath = "";
+    private int glassApplyVersion;
 
     public MainWindow()
     {
@@ -40,10 +49,13 @@ public partial class MainWindow : Window
             MinimizeToTrayChoice.IsOn = preferences.MinimizeToTray;
             applyingGlassSettings = true;
             LiquidGlassChoice.IsOn = preferences.LiquidGlass;
-            WallpaperChoice.SelectedIndex = preferences.Wallpaper switch { "Pacific" => 1, "Graphite" => 2, _ => 0 };
+            AdaptiveWallpaperChoice.IsOn = preferences.AdaptiveWallpaper;
+            WallpaperChoice.SelectedIndex = preferences.AdaptiveWallpaper ? 0 : preferences.Wallpaper switch { "Custom" => 1, "Tahoe" => 2, "Pacific" => 3, "Graphite" => 4, _ => 0 };
             TransparencyChoice.Value = preferences.Transparency;
             BlurChoice.Value = preferences.BlurIntensity;
+            SaturationChoice.Value = preferences.GlassSaturation;
             AnimationsChoice.IsOn = preferences.Animations;
+            ComplexEffectsChoice.IsOn = preferences.ComplexEffects;
             applyingGlassSettings = false;
             ApplyTheme();
             ApplyGlassSettings();
@@ -52,7 +64,9 @@ public partial class MainWindow : Window
         {
             SettingsStatus.Text = "Не удалось прочитать настройки. " + ex.Message;
         }
-        Closed += (_, _) => { SaveCurrentDraft(); lifetime.Cancel(); http.Dispose(); };
+        wallpaperTimer.Tick += WallpaperTimerTick;
+        wallpaperTimer.Start();
+        Closed += (_, _) => { wallpaperTimer.Stop(); SaveCurrentDraft(); lifetime.Cancel(); http.Dispose(); };
         InitializeMedia();
         InitializeTelegram();
     }
@@ -61,6 +75,16 @@ public partial class MainWindow : Window
     {
         if (ChatsPage is null) return;
         var page = args.IsSettingsSelected ? "settings" : (args.SelectedItem as NavigationViewItem)?.Tag as string;
+        if (page is "summarize" or "draft" or "translate")
+        {
+            AgentPrompt.Text = page switch
+            {
+                "summarize" => "Суммаризируй последние сообщения открытого чата и выдели ключевые решения.",
+                "draft" => "Подготовь короткий естественный черновик ответа на последние сообщения.",
+                _ => "Переведи последние сообщения открытого чата на русский язык, сохранив смысл и тон."
+            };
+            page = "agent";
+        }
         ChatsPage.Visibility = page == "chats" && telegramReady ? Visibility.Visible : Visibility.Collapsed;
         AuthPage.Visibility = page == "chats" && !telegramReady ? Visibility.Visible : Visibility.Collapsed;
         AiPage.Visibility = page == "ai" ? Visibility.Visible : Visibility.Collapsed;
@@ -70,7 +94,10 @@ public partial class MainWindow : Window
         if (visiblePage is not null) AnimatePage(visiblePage);
     }
 
-    private void OpenAi(object sender, RoutedEventArgs args) => Navigation.SelectedItem = Navigation.MenuItems[1];
+    private void OpenAi(object sender, RoutedEventArgs args) => Navigation.SelectedItem = Navigation.MenuItems.OfType<NavigationViewItem>().First(item => item.Tag?.ToString() == "ai");
+
+    private void ShowMainChats(object sender, RoutedEventArgs args) { showingArchive = false; RefreshChatList(); }
+    private void ShowArchiveChats(object sender, RoutedEventArgs args) { showingArchive = true; RefreshChatList(); }
 
     private Uri ServerUri()
     {
@@ -243,27 +270,119 @@ public partial class MainWindow : Window
     {
         preferences.LiquidGlass = LiquidGlassChoice.IsOn;
         preferences.Wallpaper = (WallpaperChoice.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "Tahoe";
+        preferences.AdaptiveWallpaper = AdaptiveWallpaperChoice.IsOn;
         preferences.Transparency = TransparencyChoice.Value;
         preferences.BlurIntensity = BlurChoice.Value;
+        preferences.GlassSaturation = SaturationChoice.Value;
         preferences.Animations = AnimationsChoice.IsOn;
+        preferences.ComplexEffects = ComplexEffectsChoice.IsOn;
     }
 
     private void ApplyGlassSettings()
     {
         if (Root is null) return;
-        SystemBackdrop = preferences.LiquidGlass ? new DesktopAcrylicBackdrop() : new MicaBackdrop();
-        Root.Background = WallpaperBrush(preferences.Wallpaper, lightTheme);
+        _ = ApplyGlassSettingsAsync(++glassApplyVersion);
+    }
+
+    private async Task ApplyGlassSettingsAsync(int version)
+    {
+        SystemBackdrop = preferences.LiquidGlass && preferences.ComplexEffects && preferences.BlurIntensity > 10 ? new DesktopAcrylicBackdrop() : new MicaBackdrop();
+        var wallpaperPath = preferences.AdaptiveWallpaper || preferences.Wallpaper == "Windows"
+            ? GetWindowsWallpaperPath()
+            : preferences.Wallpaper == "Custom" ? preferences.CustomWallpaperPath : "";
+        Windows.UI.Color? sampled = null;
+        if (wallpaperPath.Length > 0 && File.Exists(wallpaperPath))
+        {
+            try
+            {
+                Root.Background = new ImageBrush { ImageSource = new BitmapImage(new Uri(wallpaperPath)), Stretch = Stretch.UniformToFill };
+                sampled = await SampleWallpaperColorAsync(wallpaperPath);
+                currentWallpaperPath = wallpaperPath;
+                WallpaperStatus.Text = Path.GetFileName(wallpaperPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or COMException)
+            {
+                WallpaperStatus.Text = "Не удалось открыть фон: " + ex.Message;
+            }
+        }
+        else
+        {
+            Root.Background = WallpaperBrush(preferences.Wallpaper, lightTheme);
+            currentWallpaperPath = "";
+            WallpaperStatus.Text = preferences.AdaptiveWallpaper ? "Обои Windows не найдены — используется резервный фон" : "Встроенный фон";
+        }
+        if (version != glassApplyVersion || lifetime.IsCancellationRequested) return;
         var opacity = preferences.LiquidGlass ? (byte)Math.Clamp(255 - preferences.Transparency * 2.15, 45, 205) : (byte)245;
-        var tint = lightTheme ? Windows.UI.Color.FromArgb(opacity, 235, 244, 250) : Windows.UI.Color.FromArgb(opacity, 24, 39, 54);
+        var tint = AdaptiveTint(sampled, opacity, lightTheme, preferences.GlassSaturation);
         var conversationTint = lightTheme ? Windows.UI.Color.FromArgb((byte)(opacity * .82), 225, 239, 248) : Windows.UI.Color.FromArgb((byte)(opacity * .72), 18, 31, 45);
+        if (sampled is Windows.UI.Color wall)
+            conversationTint = Windows.UI.Color.FromArgb((byte)(opacity * .72), (byte)((wall.R + tint.R) / 2), (byte)((wall.G + tint.G) / 2), (byte)((wall.B + tint.B) / 2));
         var panel = new SolidColorBrush(tint);
         ChatListPanel.Background = panel;
         MessagesPanel.Background = new SolidColorBrush(conversationTint);
         ConversationHeader.Background = new SolidColorBrush(tint);
         ComposerPanel.Background = new SolidColorBrush(tint);
         Navigation.Background = new SolidColorBrush(Windows.UI.Color.FromArgb((byte)(opacity * .72), tint.R, tint.G, tint.B));
+        SettingsGlassPanel.Background = new SolidColorBrush(Windows.UI.Color.FromArgb((byte)Math.Max(135, (int)opacity), tint.R, tint.G, tint.B));
+        BrandPanel.Background = new SolidColorBrush(Windows.UI.Color.FromArgb((byte)Math.Min(170, (int)opacity), 255, 255, 255));
         var highlight = preferences.LiquidGlass ? (byte)Math.Clamp(25 + preferences.BlurIntensity * .7, 25, 95) : (byte)30;
         ChatListPanel.BorderBrush = MessagesPanel.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(highlight, 255, 255, 255));
+    }
+
+    private async void ChooseCustomWallpaper(object sender, RoutedEventArgs args)
+    {
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
+        foreach (var extension in new[] { ".jpg", ".jpeg", ".png", ".bmp", ".webp" }) picker.FileTypeFilter.Add(extension);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        var file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+        preferences.CustomWallpaperPath = file.Path;
+        preferences.AdaptiveWallpaper = false;
+        preferences.Wallpaper = "Custom";
+        applyingGlassSettings = true;
+        AdaptiveWallpaperChoice.IsOn = false;
+        WallpaperChoice.SelectedIndex = 1;
+        applyingGlassSettings = false;
+        ApplyGlassSettings();
+        SavePreferences();
+    }
+
+    private void WallpaperTimerTick(object? sender, object args)
+    {
+        if (!preferences.AdaptiveWallpaper && preferences.Wallpaper != "Windows") return;
+        var path = GetWindowsWallpaperPath();
+        if (!string.Equals(path, currentWallpaperPath, StringComparison.OrdinalIgnoreCase)) ApplyGlassSettings();
+    }
+
+    private static string GetWindowsWallpaperPath()
+    {
+        var value = new StringBuilder(1024);
+        return SystemParametersInfo(0x0073, (uint)value.Capacity, value, 0) && File.Exists(value.ToString()) ? value.ToString() : "";
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool SystemParametersInfo(uint action, uint parameter, StringBuilder value, uint flags);
+
+    private static async Task<Windows.UI.Color?> SampleWallpaperColorAsync(string path)
+    {
+        var file = await StorageFile.GetFileFromPathAsync(path);
+        using var stream = await file.OpenReadAsync();
+        var decoder = await BitmapDecoder.CreateAsync(stream);
+        var transform = new BitmapTransform { ScaledWidth = 1, ScaledHeight = 1, InterpolationMode = BitmapInterpolationMode.Fant };
+        var pixels = (await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore, transform, ExifOrientationMode.RespectExifOrientation, ColorManagementMode.ColorManageToSRgb)).DetachPixelData();
+        return pixels.Length >= 3 ? Windows.UI.Color.FromArgb(255, pixels[2], pixels[1], pixels[0]) : null;
+    }
+
+    private static Windows.UI.Color AdaptiveTint(Windows.UI.Color? source, byte opacity, bool light, double saturation)
+    {
+        if (source is not Windows.UI.Color color)
+            return light ? Windows.UI.Color.FromArgb(opacity, 235, 244, 250) : Windows.UI.Color.FromArgb(opacity, 24, 39, 54);
+        var gray = (color.R + color.G + color.B) / 3d;
+        var factor = saturation / 50d;
+        byte Saturate(byte channel) => (byte)Math.Clamp(gray + (channel - gray) * factor, 0, 255);
+        var r = Saturate(color.R); var g = Saturate(color.G); var b = Saturate(color.B);
+        var baseValue = light ? 244 : 22;
+        return Windows.UI.Color.FromArgb(opacity, (byte)((r + baseValue * 2) / 3), (byte)((g + baseValue * 2) / 3), (byte)((b + baseValue * 2) / 3));
     }
 
     private static Brush WallpaperBrush(string wallpaper, bool light)
@@ -315,8 +434,12 @@ public sealed class Preferences
     public bool MinimizeToTray { get; set; }
     public Dictionary<long, string> Drafts { get; set; } = [];
     public bool LiquidGlass { get; set; } = true;
-    public string Wallpaper { get; set; } = "Tahoe";
+    public string Wallpaper { get; set; } = "Windows";
+    public bool AdaptiveWallpaper { get; set; } = true;
+    public string CustomWallpaperPath { get; set; } = "";
     public double Transparency { get; set; } = 58;
     public double BlurIntensity { get; set; } = 65;
+    public double GlassSaturation { get; set; } = 65;
     public bool Animations { get; set; } = true;
+    public bool ComplexEffects { get; set; } = true;
 }
