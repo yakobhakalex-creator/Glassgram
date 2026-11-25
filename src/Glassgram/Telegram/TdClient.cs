@@ -34,7 +34,7 @@ internal sealed class TdClient : IDisposable
             Send(request, id);
             var result = await completion.Task.WaitAsync(linked.Token);
             if (result.GetProperty("@type").GetString() == "error")
-                throw new TdException(result.GetProperty("message").GetString() ?? "Ошибка TDLib");
+                throw new TdException((int)result.Field("code").Number(), result.GetProperty("message").GetString() ?? "Ошибка TDLib");
             return result;
         }
         finally { pending.TryRemove(id, out _); }
@@ -105,4 +105,7 @@ internal sealed class TdClient : IDisposable
     }
 }
 
-internal sealed class TdException(string message) : Exception(message);
+internal sealed class TdException(int code, string message) : Exception(message)
+{
+    public int Code { get; } = code;
+}

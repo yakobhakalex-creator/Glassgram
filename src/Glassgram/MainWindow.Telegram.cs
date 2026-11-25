@@ -80,6 +80,11 @@ public partial class MainWindow
             var copy = state.Clone();
             DispatcherQueue.TryEnqueue(() => _ = ShowAuthorizationStateAsync(copy));
         }
+        else
+        {
+            var copy = update.Clone();
+            DispatcherQueue.TryEnqueue(() => HandleMessengerUpdate(copy));
+        }
     }
 
     private async Task ShowAuthorizationStateAsync(JsonElement state)
@@ -157,13 +162,15 @@ public partial class MainWindow
                     : "Введи облачный пароль Telegram.";
                 break;
             case "authorizationStateReady":
-                TelegramAccountStatus.Text = "Telegram подключён. Сессия сохранена на этом компьютере.";
+                StartMessenger();
                 break;
             case "authorizationStateLoggingOut":
             case "authorizationStateClosing":
+                StopMessenger();
                 AuthDescription.Text = "Завершаем сеанс…";
                 break;
             case "authorizationStateClosed":
+                StopMessenger();
                 telegram?.Dispose();
                 telegram = null;
                 if (!lifetime.IsCancellationRequested) StartTelegram();

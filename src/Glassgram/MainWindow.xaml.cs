@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     private readonly string settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Glassgram", "settings.json");
     private Preferences preferences = new();
     private bool busy;
+    private bool lightTheme;
 
     public MainWindow()
     {
@@ -28,6 +29,9 @@ public partial class MainWindow : Window
             if (File.Exists(settingsPath))
                 preferences = JsonSerializer.Deserialize<Preferences>(File.ReadAllText(settingsPath)) ?? new();
             Endpoint.Text = preferences.Endpoint;
+            ChatColumn.Width = new GridLength(Math.Clamp(preferences.ChatPaneWidth, 240, 540));
+            ThemeChoice.SelectedIndex = preferences.Theme == "Light" ? 1 : 0;
+            ApplyTheme();
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -132,10 +136,7 @@ public partial class MainWindow : Window
         {
             preferences.Endpoint = Endpoint.Text.Trim();
             ServerUri();
-            Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
-            var temporaryPath = settingsPath + ".tmp";
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(preferences));
-            File.Move(temporaryPath, settingsPath, overwrite: true);
+            SavePreferences();
             SettingsStatus.Text = "Настройки сохранены.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -144,6 +145,29 @@ public partial class MainWindow : Window
             SettingsStatus.Text = ex.Message;
         }
     }
+
+    private void ThemeChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (Root is null || ThemeChoice?.SelectedItem is not ComboBoxItem item) return;
+        preferences.Theme = item.Tag?.ToString() == "Light" ? "Light" : "Dark";
+        ApplyTheme();
+        SavePreferences();
+    }
+
+    private void ApplyTheme()
+    {
+        lightTheme = preferences.Theme == "Light";
+        Root.RequestedTheme = lightTheme ? ElementTheme.Light : ElementTheme.Dark;
+        RefreshReadMarks();
+    }
+
+    private void SavePreferences()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
+        var temporaryPath = settingsPath + ".tmp";
+        File.WriteAllText(temporaryPath, JsonSerializer.Serialize(preferences));
+        File.Move(temporaryPath, settingsPath, overwrite: true);
+    }
 }
 
 public record ChatMessage(string role, string content);
@@ -151,4 +175,6 @@ public sealed class Preferences
 {
     public string Endpoint { get; set; } = "http://127.0.0.1:11434";
     public string Model { get; set; } = "";
+    public string Theme { get; set; } = "Dark";
+    public double ChatPaneWidth { get; set; } = 320;
 }
