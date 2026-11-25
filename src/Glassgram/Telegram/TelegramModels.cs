@@ -194,6 +194,8 @@ internal sealed class MessageRow : INotifyPropertyChanged
     public bool GroupedWithPrevious { get; set; }
     public Visibility AvatarVisibility => !Outgoing && !GroupedWithPrevious ? Visibility.Visible : Visibility.Collapsed;
     public Visibility AuthorVisibility => Author.Length > 0 && !GroupedWithPrevious ? Visibility.Visible : Visibility.Collapsed;
+    public string DisplayText => MediaKind == "sticker" ? "" : Text;
+    public double BubbleMaxWidth => MediaKind == "sticker" ? 280 : 10000;
     public Thickness RowMargin => new(Outgoing ? 18 : 0, GroupedWithPrevious ? 1 : 5, Outgoing ? 0 : 12, 0);
     public CornerRadius BubbleCornerRadius => Outgoing
         ? new(18, 18, GroupedWithPrevious ? 18 : 5, 18)
@@ -351,7 +353,7 @@ internal sealed class MessageRow : INotifyPropertyChanged
             IsDownloadingActive = local.Field("is_downloading_active").Flag();
             CanBeDownloaded = local.Field("can_be_downloaded").Flag();
             TransferProgress = Math.Clamp(downloaded * 100d / expected, 0, 100);
-            TransferText = completed ? "Загрузка завершена" : IsDownloadingActive ? $"Загрузка {TransferProgress:0}%" : CanBeDownloaded ? "Ожидание загрузки…" : "TDLib не может скачать файл";
+            TransferText = completed ? "" : IsDownloadingActive ? $"Загрузка {TransferProgress:0}%" : CanBeDownloaded ? "Ожидание загрузки…" : "TDLib не может скачать файл";
             if (completed && (path.Length == 0 || !File.Exists(path))) TransferText = "TDLib завершил загрузку, но файл отсутствует на диске";
         }
         RefreshMediaPreview();
@@ -368,7 +370,7 @@ internal sealed class MessageRow : INotifyPropertyChanged
 
     private void RaiseMedia()
     {
-        foreach (var name in new[] { nameof(MediaPreview), nameof(MediaPath), nameof(PreviewPath), nameof(TransferProgress), nameof(TransferText), nameof(TransferVisibility), nameof(FileSizeText), nameof(IsDownloadCompleted), nameof(IsDownloadingActive), nameof(CanBeDownloaded) })
+        foreach (var name in new[] { nameof(MediaPreview), nameof(MediaPath), nameof(PreviewPath), nameof(TransferProgress), nameof(TransferText), nameof(TransferVisibility), nameof(FileSizeText), nameof(IsDownloadCompleted), nameof(IsDownloadingActive), nameof(CanBeDownloaded), nameof(DisplayText), nameof(BubbleMaxWidth) })
             PropertyChanged?.Invoke(this, new(name));
     }
 
@@ -378,7 +380,9 @@ internal sealed class MessageRow : INotifyPropertyChanged
         var color = Outgoing
             ? light ? Windows.UI.Color.FromArgb(230, 195, 226, 245) : Windows.UI.Color.FromArgb(210, 43, 101, 132)
             : light ? Windows.UI.Color.FromArgb(240, 255, 255, 255) : Windows.UI.Color.FromArgb(185, 52, 68, 84);
-        BubbleBrush = new SolidColorBrush(color);
+        BubbleBrush = MediaKind == "sticker"
+            ? new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0))
+            : new SolidColorBrush(color);
         BubbleBorderBrush = new SolidColorBrush(light ? Windows.UI.Color.FromArgb(42, 20, 70, 100) : Windows.UI.Color.FromArgb(58, 255, 255, 255));
         PropertyChanged?.Invoke(this, new(nameof(Status)));
         PropertyChanged?.Invoke(this, new(nameof(BubbleBrush)));
