@@ -51,18 +51,28 @@ public partial class MainWindow
         if (telegram is null) throw new InvalidOperationException("TDLib не подключена.");
         if (fileId == 0) throw new InvalidOperationException("TDLib вернула пустой file_id.");
         RegisterMessageFiles(row);
-        if (row.IsDownloadCompleted && row.MediaPath.Length > 0 && File.Exists(row.MediaPath)) return row.MediaPath;
-        var ownsWaiter = !mediaDownloadWaiters.TryGetValue(fileId, out var waiter);
+        var existingPath = fileId == row.PrimaryFileId ? row.MediaPath : row.PreviewPath;
+        if (existingPath.Length > 0 && File.Exists(existingPath)) return existingPath;
+        TaskCompletionSource<JsonElement>? waiter = null;
+        var ownsWaiter = waitForCompletion && !mediaDownloadWaiters.TryGetValue(fileId, out waiter);
         if (ownsWaiter)
         {
             waiter = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
             mediaDownloadWaiters[fileId] = waiter;
         }
-        var file = await telegram.RequestAsync(new
+        JsonElement file;
+        try
         {
-            @type = "downloadFile", file_id = fileId, priority = waitForCompletion ? 32 : 2,
-            offset = 0, limit = 0, synchronous = false
-        }, lifetime.Token);
+            file = await telegram.RequestAsync(new
+            {
+                @type = "downloadFile", file_id = fileId, priority = waitForCompletion ? 32 : 2,
+                offset = 0, limit = 0, synchronous = false
+            }, lifetime.Token);
+        }
+        catch (TdException ex)
+        {
+            throw new IOException($"Ошибка TDLib downloadFile для file_id={fileId}: {ex.Message}", ex);
+        }
         row.ApplyFile(file);
         NotifyMediaFileUpdate(file);
         if (!waitForCompletion) return "";
@@ -98,7 +108,11 @@ public partial class MainWindow
         var fileId = (int)file.Field("id").Number();
         if (fileId == 0 || !mediaDownloadWaiters.TryGetValue(fileId, out var waiter)) return;
         var local = file.Field("local");
+        var expected = Math.Max(file.Field("expected_size").Number(), file.Field("size").Number());
+        var downloaded = local.Field("downloaded_size").Number();
         if (local.Field("is_downloading_completed").Flag()) waiter.TrySetResult(file.Clone());
+        else if (local.Field("is_downloading_active").Flag() && expected > 0)
+            MessengerStatus.Text = $"Загрузка file_id={fileId}: {Math.Clamp(downloaded * 100d / expected, 0, 100):0}%";
         else if (!local.Field("can_be_downloaded").Flag() && !local.Field("is_downloading_active").Flag())
             waiter.TrySetException(new IOException($"TDLib не может скачать file_id={fileId}. local.path='{local.Field("path").Text()}'."));
     }
