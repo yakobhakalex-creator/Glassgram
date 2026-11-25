@@ -17,12 +17,21 @@ public partial class MainWindow
 {
     private void HandleMessengerUpdate(JsonElement update)
     {
-        if (!messengerStarted) return;
         var kind = update.Field("@type").Text();
         var chatId = update.Field("chat_id").Number();
+        if (!messengerStarted)
+        {
+            if (kind is "updateNewChat" or "updateChatPosition" or "updateChatLastMessage" or "updateChatDraftMessage")
+            {
+                pendingChatUpdates.Add(update.Clone());
+                LogChatOrder($"queued-before-start type={kind} chat_id={chatId}");
+            }
+            return;
+        }
         switch (kind)
         {
             case "updateNewChat":
+                LogPositions(update.Field("chat").Field("id").Number(), kind, update.Field("chat").Field("positions"));
                 UpsertChat(update.Field("chat"));
                 break;
             case "updateChatTitle":
@@ -39,6 +48,7 @@ public partial class MainWindow
                 break;
             case "updateChatLastMessage":
             case "updateChatDraftMessage":
+                LogPositions(chatId, kind, update.Field("positions"));
                 if (knownChats.TryGetValue(chatId, out var moved))
                 {
                     moved.ApplyPositions(update.Field("positions"));
@@ -47,6 +57,7 @@ public partial class MainWindow
                 _ = RefreshChatAsync(chatId);
                 break;
             case "updateChatPosition":
+                LogPositions(chatId, kind, JsonSerializer.SerializeToElement(new[] { update.Field("position") }));
                 if (knownChats.TryGetValue(chatId, out var positioned))
                 {
                     var position = update.Field("position");
@@ -88,10 +99,11 @@ public partial class MainWindow
     private async Task RefreshChatAsync(long chatId)
     {
         if (chatId == 0 || telegram is null) return;
+        var expectedRevision = knownChats.TryGetValue(chatId, out var existing) ? existing.PositionRevision : -1;
         try
         {
             var chat = await telegram.RequestAsync(new { @type = "getChat", chat_id = chatId }, lifetime.Token);
-            if (messengerStarted) UpsertChat(chat);
+            if (messengerStarted) UpsertChat(chat, saved: existing?.IsSaved ?? false, expectedPositionRevision: expectedRevision);
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException) { }
     }

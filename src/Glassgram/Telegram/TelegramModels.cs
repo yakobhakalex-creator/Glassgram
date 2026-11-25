@@ -14,7 +14,11 @@ internal static class TdJson
         value.ValueKind == JsonValueKind.Object && value.TryGetProperty(name, out var result) ? result : default;
 
     public static string Text(this JsonElement value) => value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
-    public static long Number(this JsonElement value) => value.ValueKind == JsonValueKind.Number ? value.GetInt64() : 0;
+    public static long Number(this JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)) return number;
+        return value.ValueKind == JsonValueKind.String && long.TryParse(value.GetString(), out number) ? number : 0;
+    }
     public static bool Flag(this JsonElement value) => value.ValueKind is JsonValueKind.True;
     public static IEnumerable<JsonElement> Items(this JsonElement value) =>
         value.ValueKind == JsonValueKind.Array ? value.EnumerateArray() : [];
@@ -63,6 +67,7 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
     public ImageSource? Avatar { get; private set; }
     private readonly Dictionary<string, long> listOrders = [];
     private readonly Dictionary<string, bool> listPinned = [];
+    public long PositionRevision { get; private set; }
     public long Order => GetOrder("chatListMain");
     public bool IsMain { get; private set; }
     public bool IsArchive { get; private set; }
@@ -81,7 +86,7 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public void Update(JsonElement chat)
+    public void Update(JsonElement chat, bool updatePositions = true)
     {
         Title = IsSaved ? "Избранное" : chat.Field("title").Text();
         Preview = chat.Field("last_message").ValueKind is JsonValueKind.Object ? TdJson.MessageText(chat.Field("last_message")) : "";
@@ -102,7 +107,7 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
             CanSendVideos = permissions.Field("can_send_videos").Flag();
             CanSendDocuments = permissions.Field("can_send_documents").Flag();
         }
-        ApplyPositions(chat.Field("positions"));
+        if (updatePositions) ApplyPositions(chat.Field("positions"));
         var small = chat.Field("photo").Field("small");
         PhotoFileId = (int)small.Field("id").Number();
         SetAvatar(small.Field("local").Field("path").Text());
@@ -111,6 +116,7 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
 
     public void ApplyPositions(JsonElement positions)
     {
+        PositionRevision++;
         listOrders.Clear();
         listPinned.Clear();
         IsMain = false;
@@ -125,6 +131,7 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
 
     public void ApplyList(string listType, bool present = true, long order = 0, bool pinned = false)
     {
+        PositionRevision++;
         if (listType == "chatListMain") IsMain = present;
         if (listType == "chatListArchive") IsArchive = present;
         if (present && order != 0) { listOrders[listType] = order; listPinned[listType] = pinned; }

@@ -11,7 +11,10 @@ namespace Glassgram;
 public partial class MainWindow
 {
     private const int InitialHistoryLimit = 500;
+    private static readonly object ChatOrderLogLock = new();
+    private static readonly string ChatOrderLogPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Glassgram", "chat-order-diagnostics.log");
     private readonly Dictionary<long, ChatRow> knownChats = [];
+    private readonly List<JsonElement> pendingChatUpdates = [];
     private readonly ObservableCollection<ChatRow> visibleChats = [];
     private readonly ObservableCollection<MessageRow> visibleMessages = [];
     private readonly Dictionary<long, ChatHistory> histories = [];
@@ -39,6 +42,7 @@ public partial class MainWindow
     private DateTime lastTypingReceived;
     private bool showingArchive;
     private bool suppressDraftSave;
+    private bool chatListsLoading;
 
     private sealed class ChatHistory
     {
@@ -53,9 +57,19 @@ public partial class MainWindow
     private void StartMessenger()
     {
         if (messengerStarted || telegram is null) return;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(ChatOrderLogPath)!);
+            lock (ChatOrderLogLock) File.WriteAllText(ChatOrderLogPath, $"{DateTime.UtcNow:O} start messenger{Environment.NewLine}");
+        }
+        catch (IOException) { }
         messengerStarted = true;
+        chatListsLoading = true;
         ChatList.ItemsSource = visibleChats;
         MessageList.ItemsSource = visibleMessages;
+        LogChatOrder($"replay queued_updates={pendingChatUpdates.Count}");
+        foreach (var update in pendingChatUpdates) HandleMessengerUpdate(update);
+        pendingChatUpdates.Clear();
         _ = LoadChatListsAsync(telegram);
         if (pendingNotificationChat is long chatId)
             _ = OpenChatAsync(chatId);
@@ -68,6 +82,7 @@ public partial class MainWindow
         activeChat = null;
         selectedMessage = null;
         knownChats.Clear();
+        pendingChatUpdates.Clear();
         visibleChats.Clear();
         visibleMessages.Clear();
         histories.Clear();
@@ -94,10 +109,14 @@ public partial class MainWindow
             }
             catch (TdException) { }
             await Task.WhenAll(LoadChatListAsync(client, "chatListMain"), LoadChatListAsync(client, "chatListArchive"));
+            chatListsLoading = false;
+            RefreshChatList();
+            LogChatOrder($"initial-load-complete known={knownChats.Count} visible={visibleChats.Count}");
             if (pendingNotificationChat is long chatId) await OpenChatAsync(chatId);
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException or JsonException)
         {
+            chatListsLoading = false;
             if (messengerStarted && !lifetime.IsCancellationRequested) MessengerStatus.Text = "Не удалось загрузить чаты. " + ex.Message;
         }
     }
@@ -111,39 +130,36 @@ public partial class MainWindow
             try { await client.RequestAsync(new { @type = "loadChats", chat_list = list, limit = 100 }, lifetime.Token); }
             catch (TdException ex) when (ex.Code == 404) { loadedAll = true; }
             var chats = await client.RequestAsync(new { @type = "getChats", chat_list = list, limit = 100000 }, lifetime.Token);
-            foreach (var id in chats.Field("chat_ids").Items())
+            var chatIds = chats.Field("chat_ids").Items().ToArray();
+            LogChatOrder($"getChats list={listType} count={chatIds.Length} loadedAll={loadedAll}");
+            foreach (var id in chatIds)
             {
                 var chatId = id.Number();
-                if (knownChats.TryGetValue(chatId, out var existing))
-                {
-                    var refreshed = await client.RequestAsync(new { @type = "getChat", chat_id = chatId }, lifetime.Token);
-                    UpsertChat(refreshed, saved: existing.IsSaved, sourceList: listType);
-                    continue;
-                }
+                var expectedRevision = knownChats.TryGetValue(chatId, out var existing) ? existing.PositionRevision : -1;
                 var chat = await client.RequestAsync(new { @type = "getChat", chat_id = chatId }, lifetime.Token);
-                UpsertChat(chat, sourceList: listType);
+                UpsertChat(chat, saved: existing?.IsSaved ?? false, sourceList: listType, expectedPositionRevision: expectedRevision);
             }
             if (loadedAll) break;
         }
     }
 
-    private void UpsertChat(JsonElement chat, bool saved = false, string? sourceList = null)
+    private void UpsertChat(JsonElement chat, bool saved = false, string? sourceList = null, long? expectedPositionRevision = null)
     {
         var id = chat.Field("id").Number();
         if (id == 0) return;
-        if (!knownChats.TryGetValue(id, out var row)) knownChats[id] = row = new ChatRow(id);
+        LogPositions(id, sourceList is null ? "upsert" : $"getChat({sourceList})", chat.Field("positions"));
+        var existed = knownChats.TryGetValue(id, out var row);
+        row ??= new ChatRow(id);
+        if (!existed) knownChats[id] = row;
         row.IsSaved |= saved || id == savedChatId;
-        row.Update(chat);
-        // TDLib can return a chat before its position update has reached this client.
-        // Preserve the list that enumerated it until the authoritative position arrives.
-        if (sourceList is "chatListMain" && !row.IsMain) row.ApplyList(sourceList);
-        if (sourceList is "chatListArchive" && !row.IsArchive) row.ApplyList(sourceList);
+        var updatePositions = expectedPositionRevision is null || !existed && expectedPositionRevision == -1 || row.PositionRevision == expectedPositionRevision;
+        row.Update(chat, updatePositions);
         if (row.PhotoFileId != 0 && row.Avatar is null)
         {
             avatarFiles[row.PhotoFileId] = id;
             _ = DownloadAvatarAsync(row.PhotoFileId);
         }
-        RefreshChatList();
+        if (!chatListsLoading) RefreshChatList();
         if (activeChat?.Id == id)
         {
             activeChat = row;
@@ -173,8 +189,28 @@ public partial class MainWindow
         if (rows.Length == visibleChats.Count && rows.SequenceEqual(visibleChats)) return;
         visibleChats.Clear();
         foreach (var row in rows) visibleChats.Add(row);
+        LogChatOrder($"visible list={(showingArchive ? "chatListArchive" : "chatListMain")} count={rows.Length}");
         if (selected is long id && knownChats.TryGetValue(id, out var current) && visibleChats.Contains(current))
             ChatList.SelectedItem = current;
+    }
+
+    private static void LogChatOrder(string message)
+    {
+        try
+        {
+            lock (ChatOrderLogLock) File.AppendAllText(ChatOrderLogPath, $"{DateTime.UtcNow:O} {message}{Environment.NewLine}");
+        }
+        catch (IOException) { }
+    }
+
+    private static void LogPositions(long chatId, string source, JsonElement positions)
+    {
+        foreach (var position in positions.Items())
+        {
+            var list = ChatRow.ListKey(position.Field("list"));
+            var order = position.Field("order");
+            LogChatOrder($"{source} chat_id={chatId} list={list} order={order.Number()} order_kind={order.ValueKind} order_raw={order} pinned={position.Field("is_pinned").Flag()}");
+        }
     }
 
     private void SearchChats(object sender, TextChangedEventArgs args) => RefreshChatList();
