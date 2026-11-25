@@ -13,6 +13,7 @@
       <NavigationView.MenuItems>
         <NavigationViewItem Content="Сообщения" Tag="chats" Icon="Message" IsSelected="True"/>
         <NavigationViewItem Content="Локальный ИИ" Tag="ai" Icon="Help"/>
+        <NavigationViewItem Content="ИИ-агент" Tag="agent" Icon="Contact"/>
       </NavigationView.MenuItems>
       <Grid Margin="0,0,20,20">
         <Grid x:Name="AuthPage" Visibility="Collapsed">
@@ -192,6 +193,22 @@
           <Grid Grid.Row="3" ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <TextBox x:Name="Prompt" PlaceholderText="Напиши сообщение…" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="120"/>
             <Button x:Name="SendButton" Grid.Column="1" Content="Отправить" Click="Send" VerticalAlignment="Bottom"/>
+          </Grid>
+        </Grid>
+        <Grid x:Name="AgentPage" Visibility="Collapsed" RowSpacing="16">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <StackPanel Spacing="8">
+            <TextBlock Text="ИИ-агент" FontSize="28" FontWeight="SemiBold"/>
+            <TextBlock Text="Работает локально через Ollama и использует последние сообщения открытого чата. Ничего не отправляет в Telegram автоматически." Opacity="0.7" TextWrapping="Wrap"/>
+            <StackPanel Orientation="Horizontal" Spacing="12"><ComboBox x:Name="AgentModels" PlaceholderText="Выбери модель" MinWidth="250"/><Button Content="Обновить модели" Click="RefreshModels"/></StackPanel>
+          </StackPanel>
+          <Border Grid.Row="1" Background="{ThemeResource GlassPanelBrush}" CornerRadius="18" Padding="20">
+            <ScrollViewer x:Name="AgentScroll"><StackPanel x:Name="AgentConversation" Spacing="16"/></ScrollViewer>
+          </Border>
+          <TextBlock x:Name="AgentStatus" Grid.Row="2" Text="Открой чат, поставь задачу — агент предложит ответ или действие." Foreground="#B6C8D9" TextWrapping="Wrap"/>
+          <Grid Grid.Row="3" ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBox x:Name="AgentPrompt" PlaceholderText="Например: предложи короткий ответ на последние сообщения" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="120"/>
+            <Button x:Name="AgentSendButton" Grid.Column="1" Content="Запустить" Click="RunAgent" VerticalAlignment="Bottom"/>
           </Grid>
         </Grid>
         <StackPanel x:Name="SettingsPage" Visibility="Collapsed" Spacing="20" MaxWidth="540" HorizontalAlignment="Left">

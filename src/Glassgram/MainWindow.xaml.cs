@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     private readonly string settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Glassgram", "settings.json");
     private Preferences preferences = new();
     private bool busy;
+    private bool agentBusy;
     private bool lightTheme;
 
     public MainWindow()
@@ -53,6 +54,7 @@ public partial class MainWindow : Window
         ChatsPage.Visibility = page == "chats" && telegramReady ? Visibility.Visible : Visibility.Collapsed;
         AuthPage.Visibility = page == "chats" && !telegramReady ? Visibility.Visible : Visibility.Collapsed;
         AiPage.Visibility = page == "ai" ? Visibility.Visible : Visibility.Collapsed;
+        AgentPage.Visibility = page == "agent" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = page == "settings" ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -78,7 +80,9 @@ public partial class MainWindow : Window
             using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(timeout.Token), cancellationToken: timeout.Token);
             var names = json.RootElement.GetProperty("models").EnumerateArray().Select(m => m.GetProperty("name").GetString()!).ToList();
             Models.ItemsSource = names;
+            AgentModels.ItemsSource = names;
             Models.SelectedItem = names.Contains(preferences.Model) ? preferences.Model : names.FirstOrDefault();
+            AgentModels.SelectedItem = Models.SelectedItem;
             AiStatus.Text = names.Count == 0 ? "Ollama работает. Установи модель, затем повтори проверку." : "Ollama подключена. Можно отправить сообщение.";
         }
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or InvalidOperationException or KeyNotFoundException)
@@ -132,6 +136,51 @@ public partial class MainWindow : Window
         Conversation.Children.Add(block);
         ConversationScroll.UpdateLayout();
         ConversationScroll.ChangeView(null, ConversationScroll.ScrollableHeight, null);
+    }
+
+    private async void RunAgent(object sender, RoutedEventArgs args)
+    {
+        var goal = AgentPrompt.Text.Trim();
+        if (agentBusy || goal.Length == 0) return;
+        if (activeChat is null || !histories.TryGetValue(activeChat.Id, out var history)) { AgentStatus.Text = "Сначала открой Telegram-чат."; return; }
+        if (AgentModels.SelectedItem is not string model) { AgentStatus.Text = "Обнови список и выбери модель Ollama."; return; }
+        agentBusy = true;
+        AgentSendButton.IsEnabled = AgentModels.IsEnabled = false;
+        AgentStatus.Text = "Агент анализирует текущий чат…";
+        try
+        {
+            var context = string.Join("\n", history.Messages.Values.OrderByDescending(m => m.Date).Take(50).OrderBy(m => m.Date)
+                .Select(m => $"{(m.Outgoing ? "Я" : "Собеседник")}: {m.Text}"));
+            var requestMessages = new[]
+            {
+                new ChatMessage("system", "Ты локальный помощник в Telegram-клиенте Glassgram. Анализируй контекст, отвечай кратко и безопасно. Не утверждай, что отправил сообщение: ты только предлагаешь текст пользователю."),
+                new ChatMessage("user", $"Текущий чат: {activeChat.Title}\nПоследние сообщения:\n{context}\n\nЗадача пользователя: {goal}")
+            };
+            using var response = await http.PostAsJsonAsync(new Uri(ServerUri(), "/api/chat"), new { model, messages = requestMessages, stream = false }, lifetime.Token);
+            response.EnsureSuccessStatusCode();
+            using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(lifetime.Token), cancellationToken: lifetime.Token);
+            var reply = json.RootElement.GetProperty("message").GetProperty("content").GetString();
+            if (string.IsNullOrWhiteSpace(reply)) throw new InvalidOperationException("Модель вернула пустой ответ.");
+            AddAgentMessage("Задача", goal);
+            AddAgentMessage(model, reply);
+            AgentPrompt.Text = "";
+            AgentStatus.Text = "Готово · результат не отправлен в Telegram";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            if (!lifetime.IsCancellationRequested) AgentStatus.Text = "Агент не ответил. " + ex.Message;
+        }
+        finally { agentBusy = false; AgentSendButton.IsEnabled = AgentModels.IsEnabled = true; }
+    }
+
+    private void AddAgentMessage(string author, string text)
+    {
+        var block = new StackPanel { Spacing = 6 };
+        block.Children.Add(new TextBlock { Text = author, Opacity = 0.6, FontSize = 12 });
+        block.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, FontSize = 16 });
+        AgentConversation.Children.Add(block);
+        AgentScroll.UpdateLayout();
+        AgentScroll.ChangeView(null, AgentScroll.ScrollableHeight, null);
     }
 
     private void SaveSettings(object sender, RoutedEventArgs args)

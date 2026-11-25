@@ -94,10 +94,18 @@ public partial class MainWindow
         }
         if (activeChat?.Id != row.ChatId) return;
         var offset = messageScroller?.VerticalOffset ?? 0;
+        historyRestores++;
         RenderHistory(row.ChatId);
-        MessageList.UpdateLayout();
-        messageScroller?.ChangeView(null, nearBottom ? messageScroller.ScrollableHeight : offset, null, true);
+        if (nearBottom) _ = FinishMessageRenderAsync(row.ChatId);
+        else if (!DispatcherQueue.TryEnqueue(() => { messageScroller?.ChangeView(null, offset, null, true); historyRestores--; })) historyRestores--;
         if (nearBottom) _ = MarkReadAsync();
+    }
+
+    private async Task FinishMessageRenderAsync(long chatId)
+    {
+        try { await ScrollToLatestAsync(chatId); }
+        catch (OperationCanceledException) { }
+        finally { historyRestores--; }
     }
 
     private void ReplacePendingMessage(JsonElement update)

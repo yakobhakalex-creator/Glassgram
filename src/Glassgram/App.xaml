@@ -2,15 +2,15 @@
   <Application.Resources><ResourceDictionary>
     <ResourceDictionary.ThemeDictionaries>
       <ResourceDictionary x:Key="Dark">
-        <LinearGradientBrush x:Key="WindowGlassBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#D9182738" Offset="0"/><GradientStop Color="#E6111725" Offset="1"/></LinearGradientBrush>
-        <SolidColorBrush x:Key="GlassPanelBrush" Color="#277C9DAF"/>
-        <SolidColorBrush x:Key="GlassConversationBrush" Color="#157C9DAF"/>
+        <LinearGradientBrush x:Key="WindowGlassBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#B8182738" Offset="0"/><GradientStop Color="#C8111725" Offset="1"/></LinearGradientBrush>
+        <SolidColorBrush x:Key="GlassPanelBrush" Color="#357C9DAF"/>
+        <SolidColorBrush x:Key="GlassConversationBrush" Color="#207C9DAF"/>
         <SolidColorBrush x:Key="GlassMutedBrush" Color="#B6C8D9"/>
       </ResourceDictionary>
       <ResourceDictionary x:Key="Light">
-        <LinearGradientBrush x:Key="WindowGlassBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#E7EAF4F8" Offset="0"/><GradientStop Color="#F2DCE9F2" Offset="1"/></LinearGradientBrush>
-        <SolidColorBrush x:Key="GlassPanelBrush" Color="#C7FFFFFF"/>
-        <SolidColorBrush x:Key="GlassConversationBrush" Color="#A9FFFFFF"/>
+        <LinearGradientBrush x:Key="WindowGlassBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#C8EAF4F8" Offset="0"/><GradientStop Color="#D8DCE9F2" Offset="1"/></LinearGradientBrush>
+        <SolidColorBrush x:Key="GlassPanelBrush" Color="#A8FFFFFF"/>
+        <SolidColorBrush x:Key="GlassConversationBrush" Color="#82FFFFFF"/>
         <SolidColorBrush x:Key="GlassMutedBrush" Color="#526577"/>
       </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
