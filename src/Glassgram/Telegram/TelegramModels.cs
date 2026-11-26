@@ -50,6 +50,7 @@ internal static class TdJson
             "messageVoiceNote" => "Голосовое сообщение",
             "messageAudio" => "Аудио",
             "messageDocument" => "Файл",
+            "messagePoll" => content.Field("poll").Field("question").Field("text").Text(),
             _ => "Сообщение"
         };
     }
@@ -86,6 +87,7 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
     public bool CanSendPhotos { get; private set; } = true;
     public bool CanSendVideos { get; private set; } = true;
     public bool CanSendDocuments { get; private set; } = true;
+    public bool CanSendPolls { get; private set; } = true;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -111,6 +113,7 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
             CanSendPhotos = permissions.Field("can_send_photos").Flag();
             CanSendVideos = permissions.Field("can_send_videos").Flag();
             CanSendDocuments = permissions.Field("can_send_documents").Flag();
+            CanSendPolls = permissions.Field("can_send_polls").Flag();
         }
         if (updatePositions) ApplyPositions(chat.Field("positions"));
         var small = chat.Field("photo").Field("small");
@@ -203,7 +206,7 @@ internal sealed partial class MessageRow : INotifyPropertyChanged
     public bool GroupedWithPrevious { get; set; }
     public Visibility AvatarVisibility => !Outgoing && !GroupedWithPrevious ? Visibility.Visible : Visibility.Collapsed;
     public Visibility AuthorVisibility => Author.Length > 0 && !GroupedWithPrevious ? Visibility.Visible : Visibility.Collapsed;
-    public string DisplayText => MediaKind is "sticker" or "voice" ? "" : Text;
+    public string DisplayText => MediaKind is "sticker" or "voice" || PollId != 0 ? "" : Text;
     public double BubbleMaxWidth => MediaKind == "sticker" ? 280 : 10000;
     public Thickness RowMargin => new(Outgoing ? 18 : 0, GroupedWithPrevious ? 1 : 5, Outgoing ? 0 : 12, 0);
     public CornerRadius BubbleCornerRadius => Outgoing
@@ -321,6 +324,9 @@ internal sealed partial class MessageRow : INotifyPropertyChanged
                 VoiceDuration = (int)voice.Field("duration").Number();
                 VoiceWaveform = voice.Field("waveform").Text();
                 FileName = "voice.ogg";
+                break;
+            case "messagePoll":
+                ApplyPoll(content.Field("poll"));
                 break;
         }
         ApplyInitialFile(primary, true);

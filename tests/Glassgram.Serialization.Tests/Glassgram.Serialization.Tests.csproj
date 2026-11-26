@@ -10,6 +10,7 @@
     <Compile Include="..\..\src\Glassgram\Telegram\ChatMemberPolicy.cs" Link="ChatMemberPolicy.cs" />
     <Compile Include="..\..\src\Glassgram\Telegram\VoiceNotePipeline.cs" Link="VoiceNotePipeline.cs" />
     <Compile Include="..\..\src\Glassgram\Telegram\HistoryContext.cs" Link="HistoryContext.cs" />
+    <Compile Include="..\..\src\Glassgram\Telegram\PollRequestFactory.cs" Link="PollRequestFactory.cs" />
     <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="Concentus.Oggfile" Version="1.0.7" />
   </ItemGroup>

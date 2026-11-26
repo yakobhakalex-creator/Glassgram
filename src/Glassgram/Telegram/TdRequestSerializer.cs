@@ -32,12 +32,13 @@ internal static class TdRequestSerializer
 
     private static void WriteObject(Utf8JsonWriter writer, JsonElement value, long? extra = null, bool root = false)
     {
-        if (value.TryGetProperty("type", out _) && value.TryGetProperty("@type", out _))
-            throw new JsonException("TDLib object contains both type and @type.");
+        // A typed TDLib object may legitimately have a schema field named "type"
+        // (for example inputMessagePoll.type). Only escaped C# @type needs rewriting.
+        var hasExplicitType = value.TryGetProperty("@type", out _);
         writer.WriteStartObject();
         foreach (var property in value.EnumerateObject())
         {
-            writer.WritePropertyName(property.Name == "type" ? "@type" : property.Name);
+            writer.WritePropertyName(property.Name == "type" && !hasExplicitType ? "@type" : property.Name);
             WriteValue(writer, property.Value);
         }
         if (root && extra.HasValue) writer.WriteNumber("@extra", extra.Value);
@@ -68,7 +69,7 @@ internal static class TdRequestSerializer
         {
             foreach (var property in value.EnumerateObject())
             {
-                if (property.Name == "type")
+                if (property.Name == "type" && !value.TryGetProperty("@type", out _))
                     throw new JsonException($"TDLib typed object contains 'type' instead of '@type' at {path}.");
                 EnsureNoEscapedTypeNames(property.Value, path + "." + property.Name);
             }

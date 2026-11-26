@@ -620,5 +620,6 @@ public partial class MainWindow
     {
         if (activeChat is null) return;
         ComposerPanel.Visibility = activeChat.CanSendBasicMessages ? Visibility.Visible : Visibility.Collapsed;
+        CreatePollMenuItem.IsEnabled = activeChat.CanSendPolls;
     }
 }

@@ -182,6 +182,34 @@ if (chatContext == topicContext || topicContext == otherTopicContext || topicCon
 var routing = new Dictionary<HistoryContext, long> { [topicContext] = 1, [otherTopicContext] = 2, [threadContext] = 3 };
 if (routing.Count != 3 || routing[threadContext] != 3) throw new Exception("History context routing regression");
 
+// Polls: regular, multiple-choice, quiz and forum-topic routing.
+var regularPoll = Parse(PollRequestFactory.BuildSendRequest(42, null, "Question?", new[] { "One", "Two" }, true, false, false, -1, ""));
+Equal("sendMessage", regularPoll, "$regularPoll");
+var regularContent = regularPoll.GetProperty("input_message_content");
+Equal("inputMessagePoll", regularContent, "$regularPoll.content");
+Equal("formattedText", regularContent.GetProperty("question"), "$regularPoll.question");
+Equal("formattedText", regularContent.GetProperty("options")[0], "$regularPoll.options[0]");
+Equal("pollTypeRegular", regularContent.GetProperty("type"), "$regularPoll.type");
+if (regularContent.GetProperty("type").GetProperty("allow_multiple_answers").GetBoolean()) throw new Exception("Single-choice poll regression");
+
+var multiplePoll = Parse(PollRequestFactory.BuildSendRequest(42, null, "Choose", new[] { "A", "B", "C" }, false, true, false, -1, ""));
+if (!multiplePoll.GetProperty("input_message_content").GetProperty("type").GetProperty("allow_multiple_answers").GetBoolean()) throw new Exception("Multiple-choice poll regression");
+
+var topic = new Dictionary<string, object?> { ["@type"] = "messageTopicForum", ["forum_topic_id"] = 17 };
+var quizPoll = Parse(PollRequestFactory.BuildSendRequest(42, topic, "Quiz", new[] { "Wrong", "Right" }, true, false, true, 1, "Why"));
+Equal("messageTopicForum", quizPoll.GetProperty("topic_id"), "$quizPoll.topic_id");
+var quizType = quizPoll.GetProperty("input_message_content").GetProperty("type");
+Equal("pollTypeQuiz", quizType, "$quizPoll.type");
+Equal("formattedText", quizType.GetProperty("explanation"), "$quizPoll.explanation");
+if (quizType.GetProperty("correct_option_id").GetInt32() != 1) throw new Exception("Quiz correct option regression");
+
+var vote = Parse(new { @type = "setPollAnswer", chat_id = 42L, message_id = 7L, option_ids = new[] { 0, 2 } });
+Equal("setPollAnswer", vote, "$vote");
+var stop = Parse(new { @type = "stopPoll", chat_id = 42L, message_id = 7L, reply_markup = (object?)null });
+Equal("stopPoll", stop, "$stopPoll");
+var pollUpdate = JsonDocument.Parse("""{"@type":"messagePoll","poll":{"@type":"poll","id":5,"is_closed":true,"options":[{"@type":"pollOption","voter_count":3,"vote_percentage":100,"is_chosen":true}]}}""").RootElement;
+if (!pollUpdate.GetProperty("poll").GetProperty("is_closed").GetBoolean() || !pollUpdate.GetProperty("poll").GetProperty("options")[0].GetProperty("is_chosen").GetBoolean()) throw new Exception("Poll completion update regression");
+
 // Chat folders: root and nested TDLib types.
 var folderObject = new Dictionary<string, object?>
 {

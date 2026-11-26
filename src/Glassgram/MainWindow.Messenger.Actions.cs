@@ -184,10 +184,15 @@ public partial class MainWindow
 
     private async Task RefreshMessageAsync(long chatId, long messageId)
     {
-        if (telegram is null || !histories.ContainsKey(chatId)) return;
+        if (telegram is null) return;
         try
         {
             var message = await telegram.RequestAsync(new { @type = "getMessage", chat_id = chatId, message_id = messageId }, lifetime.Token);
+            var content = message.Field("content");
+            MessageRow? existing = null;
+            if (activeHistoryContext is HistoryContext context && contextualHistories.TryGetValue(context, out var contextual)) contextual.Messages.TryGetValue(messageId, out existing);
+            if (existing is null && histories.TryGetValue(chatId, out var cached)) cached.Messages.TryGetValue(messageId, out existing);
+            if (existing is not null && content.Field("@type").Text() == "messagePoll") { existing.UpdatePoll(content.Field("poll")); return; }
             InsertMessage(message);
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException) { }
