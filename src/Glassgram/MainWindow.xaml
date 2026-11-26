@@ -11,6 +11,8 @@
       <local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
       <local:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
     </Grid.Resources>
+    <Grid x:Name="ScaledRoot" HorizontalAlignment="Left" VerticalAlignment="Top">
+      <Grid.RenderTransform><ScaleTransform x:Name="InterfaceScaleTransform"/></Grid.RenderTransform>
     <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="*"/></Grid.RowDefinitions>
     <Image x:Name="WallpaperLayer" Grid.RowSpan="2" Stretch="UniformToFill" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" IsHitTestVisible="False"/>
     <Rectangle x:Name="WallpaperVeil" Grid.RowSpan="2" IsHitTestVisible="False" Opacity="0.16"><Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#281B3E59"/><GradientStop Color="#0CFFFFFF" Offset="0.46"/><GradientStop Color="#36213855" Offset="1"/></LinearGradientBrush></Rectangle.Fill></Rectangle>
@@ -310,6 +312,14 @@
           <ComboBox x:Name="ThemeChoice" Header="Тема оформления" SelectionChanged="ThemeChanged" MinWidth="190">
             <ComboBoxItem Content="Тёмная" Tag="Dark"/><ComboBoxItem Content="Светлая" Tag="Light"/>
           </ComboBox>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <ComboBox x:Name="InterfaceScaleChoice" Header="Масштаб интерфейса" SelectionChanged="InterfaceScaleChanged" MinWidth="190">
+              <ComboBoxItem Content="75%" Tag="75"/><ComboBoxItem Content="90%" Tag="90"/><ComboBoxItem Content="100%" Tag="100"/>
+              <ComboBoxItem Content="110%" Tag="110"/><ComboBoxItem Content="125%" Tag="125"/><ComboBoxItem Content="150%" Tag="150"/>
+              <ComboBoxItem Content="175%" Tag="175"/><ComboBoxItem Content="200%" Tag="200"/>
+            </ComboBox>
+            <Button Content="Сбросить до 100%" Click="ResetInterfaceScale" VerticalAlignment="Bottom"/>
+          </StackPanel>
           <ComboBox x:Name="SendModeChoice" Header="Отправка сообщения" MinWidth="240">
             <ComboBoxItem Content="Enter отправляет" Tag="Enter"/><ComboBoxItem Content="Ctrl+Enter отправляет" Tag="CtrlEnter"/>
           </ComboBox>
@@ -328,9 +338,10 @@
           <Button Content="Сохранить" Click="SaveSettings"/>
           <TextBlock x:Name="SettingsStatus" TextWrapping="Wrap" Foreground="#B6C8D9"/>
           <Button x:Name="LogoutButton" Content="Выйти из Telegram" Click="LogoutTelegram" Visibility="Collapsed" HorizontalAlignment="Left"/>
-          <TextBlock Text="Glassgram 0.5.0 · C#, WinUI 3 и TDLib" Foreground="#B6C8D9"/>
+          <TextBlock Text="Glassgram 0.6.4 · C#, WinUI 3 и TDLib" Foreground="#B6C8D9"/>
         </StackPanel></controls:GlassPanel></ScrollViewer>
       </Grid>
     </NavigationView>
+    </Grid>
   </Grid>
 </Window>

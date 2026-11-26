@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private bool agentBusy;
     private bool lightTheme;
     private bool applyingGlassSettings;
+    private bool applyingScaleSettings;
     private readonly DispatcherTimer wallpaperTimer = new() { Interval = TimeSpan.FromSeconds(5) };
     private string currentWallpaperPath = "";
     private int glassApplyVersion;
@@ -48,6 +49,11 @@ public partial class MainWindow : Window
             ThemeChoice.SelectedIndex = preferences.Theme == "Light" ? 1 : 0;
             SendModeChoice.SelectedIndex = preferences.SendMode == "CtrlEnter" ? 1 : 0;
             MinimizeToTrayChoice.IsOn = preferences.MinimizeToTray;
+            applyingScaleSettings = true;
+            preferences.InterfaceScale = NormalizeInterfaceScale(preferences.InterfaceScale);
+            InterfaceScaleChoice.SelectedItem = InterfaceScaleChoice.Items.OfType<ComboBoxItem>()
+                .First(item => item.Tag?.ToString() == preferences.InterfaceScale.ToString());
+            applyingScaleSettings = false;
             applyingGlassSettings = true;
             LiquidGlassChoice.IsOn = preferences.LiquidGlass;
             if (preferences.Wallpaper is not ("Custom" or "Solid")) preferences.Wallpaper = "Windows";
@@ -61,6 +67,7 @@ public partial class MainWindow : Window
             applyingGlassSettings = false;
             ApplyTheme();
             ApplyGlassSettings();
+            ApplyInterfaceScale();
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -72,6 +79,7 @@ public partial class MainWindow : Window
         InitializeMedia();
         InitializeTelegram();
         InitializeSearch();
+        Root.SizeChanged += (_, _) => ApplyInterfaceScale();
     }
 
     private void Navigate(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -252,6 +260,33 @@ public partial class MainWindow : Window
         ApplyTheme();
         SavePreferences();
     }
+
+    private void InterfaceScaleChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (applyingScaleSettings || Root is null || InterfaceScaleChoice.SelectedItem is not ComboBoxItem item ||
+            !int.TryParse(item.Tag?.ToString(), out var scale)) return;
+        preferences.InterfaceScale = NormalizeInterfaceScale(scale);
+        ApplyInterfaceScale();
+        SavePreferences();
+    }
+
+    private void ResetInterfaceScale(object sender, RoutedEventArgs args)
+    {
+        InterfaceScaleChoice.SelectedItem = InterfaceScaleChoice.Items.OfType<ComboBoxItem>()
+            .First(item => item.Tag?.ToString() == "100");
+    }
+
+    private void ApplyInterfaceScale()
+    {
+        if (Root is null || ScaledRoot is null || InterfaceScaleTransform is null || Root.ActualWidth <= 0 || Root.ActualHeight <= 0) return;
+        var factor = NormalizeInterfaceScale(preferences.InterfaceScale) / 100d;
+        InterfaceScaleTransform.ScaleX = factor;
+        InterfaceScaleTransform.ScaleY = factor;
+        ScaledRoot.Width = Root.ActualWidth / factor;
+        ScaledRoot.Height = Root.ActualHeight / factor;
+    }
+
+    private static int NormalizeInterfaceScale(int scale) => scale is 75 or 90 or 100 or 110 or 125 or 150 or 175 or 200 ? scale : 100;
 
     private void ApplyTheme()
     {
@@ -458,4 +493,5 @@ public sealed class Preferences
     public double GlassSaturation { get; set; } = 65;
     public bool Animations { get; set; } = true;
     public bool ComplexEffects { get; set; } = true;
+    public int InterfaceScale { get; set; } = 100;
 }
