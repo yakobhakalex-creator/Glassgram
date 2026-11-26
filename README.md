@@ -1,58 +1,67 @@
-# Glassgram V0.6.9
+# Glassgram
 
-Glassgram — WinUI 3 клиент Telegram в стиле Liquid Glass с локальной интеграцией Ollama. Открой `Glassgram.slnx` в Visual Studio либо запускай готовую x64-сборку двойным нажатием на `C:\Glassgram\release\Glassgram.exe` — окно консоли не появляется.
+**Your messenger. Your AI. Your freedom.**
 
-V0.6.9 добавляет управление участниками и настройками групп, пригласительные ссылки и заявки, темы форумов, комментарии каналов, а также опросы и викторины. Навигация V0.6.8, закреплённые сообщения и серверный поиск сохранены. Интерфейс масштабируется от 75% до 200%.
+[Русский](README.ru.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
-## Telegram и история
+![License](https://img.shields.io/badge/license-GPL--3.0-blue)
+![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4)
+![Status](https://img.shields.io/badge/status-early%20development-orange)
 
-Авторизация выполняется через TDLib по номеру телефона или QR-коду, включая код подтверждения и двухфакторный пароль. Сессия автоматически восстанавливается при следующем запуске; выход из аккаунта доступен в настройках.
+Glassgram is an independent Telegram client for Windows built with C#, WinUI 3 and TDLib. It combines a Liquid Glass-inspired interface, customizable navigation and local AI integration through Ollama.
 
-Список содержит личные чаты, группы, каналы, архив и «Избранное», аватары, последние сообщения, время и непрочитанные сообщения. Есть поиск и изменяемая ширина панели.
+The goal is to make a modern desktop messaging experience with optional local AI accessible without a mandatory paid AI subscription. Glassgram is an unofficial client and is not affiliated with Telegram or Apple.
 
-При открытии чата Glassgram последовательно запрашивает у TDLib до 500 сообщений страницами не более 100, не считая короткий ответ концом истории. Дубликаты исключаются, более старые сообщения подгружаются при прокрутке вверх, а положение восстанавливается при переключении чатов. Загрузка асинхронная и показана индикатором. Последние 500 сообщений каждого чата кэшируются в `%LOCALAPPDATA%\Glassgram\MessageCache` в зашифрованном DPAPI-виде для текущего пользователя.
+## Current development milestone: V0.6.9
 
-Поддерживаются получение и отправка текста в реальном времени, отметки прочтения, ответы с цитатой, редактирование, массовое удаление и пересылка, реакции, закрепление, контекстные меню, черновики, разделители дат, статус собеседника, индикатор набора, горячие клавиши, быстрый переход вниз и системные уведомления Windows. Поиск внутри чата выполняется сервером TDLib и умеет переходить к сообщениям за пределами локального кэша.
+- Phone number or QR-code sign-in, verification codes and two-factor authentication.
+- Private chats, groups, channels, chat folders, archives and Saved Messages.
+- Real-time messaging, replies, editing, forwarding, deletion, reactions and pinned messages.
+- Paginated history, restored scroll position, drafts and server-side chat search.
+- Photos, videos, GIFs, documents, stickers (including WebM and TGS), animated emoji and voice messages.
+- Group member management, group settings, invite links, join requests, forum topics and channel comments.
+- Polls and quizzes, with voting and management where supported by Telegram permissions.
+- Adjustable navigation, interface scaling from 75% to 200% and Windows notifications.
+- Local integration with Ollama.
 
-В группах-форумах отображаются темы, их непрочитанные сообщения и отдельная история; поддерживаются поиск, пагинация и разрешённые сервером операции управления темами. Для публикаций каналов доступно открытие веток комментариев без автоматического вступления в связанную группу. Истории и черновики чата, темы и обсуждения изолированы.
+Glassgram is in early development. Not every operation has been tested end-to-end on live Telegram chats. Calls, Stories, secret chats, scheduled messages, data export and full administrative feature parity are not yet implemented.
 
-Опросы и викторины отображают варианты, результаты, выбранные и правильные ответы только после предоставления этих данных TDLib. Поддерживаются одиночный и множественный выбор, отмена голоса в обычном опросе, просмотр участников публичных опросов, создание и завершение при наличии прав.
+## Getting started
 
-Закреплённые сообщения показываются под заголовком чата. Доступны переход, навигация между закреплениями, полный список и локальное скрытие панели без открепления. При закреплении можно выбрать уведомление участников; в каналах и личных чатах Telegram может принудительно отключить такое уведомление.
+Glassgram currently targets Windows x64. To sign in, obtain your own Telegram API ID and API hash at [my.telegram.org](https://my.telegram.org). Do not share your API hash, login codes, two-factor password or session files.
 
-Пока не реализованы звонки, Stories, секретные чаты, запланированные сообщения, экспорт данных и полный набор административных функций официального Telegram Desktop.
+### Build from source
 
-## Медиафайлы
+Requirements recorded in the project documentation: .NET 11 SDK with Windows Desktop support, a Windows development environment and restored NuGet dependencies. TDLib 1.8.67 is used by this milestone. Ollama is required only for the local AI integration.
 
-В переписке отображаются фотографии, видео, GIF и обычные, WebM- и TGS-стикеры. Фотографии и видео открываются в полноэкранном просмотрщике. Документы можно скачать и открыть. Поддерживается отправка фото, видео и документов через кнопку вложения, перетаскивание файлов и вставка изображения из буфера по `Ctrl+V`.
-
-Медиа загружаются лениво через TDLib, показывают прогресс и используют локальный кэш. TGS-анимации воспроизводятся локальным Lottie SVG в WebView2. Для WEBM используется `MediaPlayerElement`. Поле ввода скрывается в каналах без права публикации. Ссылки в сообщениях кликабельны.
-
-Панель использует каталог Unigram и открытый цветной шрифт Noto Color Emoji. Для анимированных эмодзи в истории используются оригиналы, полученные через TDLib. Панель и история загружают оригиналы TGS и WEBM при появлении в видимой области. WEBP поддерживает прозрачность.
-
-## Данные и безопасность
-
-Для входа нужны собственные API ID и API hash с [my.telegram.org](https://my.telegram.org). Сессия TDLib хранится в `%LOCALAPPDATA%\Glassgram\Telegram`; ключ базы и API-параметры защищены Windows DPAPI. Код подтверждения и облачный пароль не сохраняются. Сессии, переписки, ключи и Release-бинарники не входят в Git.
-
-## Сборка
-
-Требуется .NET 11 SDK с поддержкой Windows Desktop. Проект использует TDLib 1.8.67, Windows App SDK WinUI 2.7 и собирается под Windows x64.
+From the repository root in PowerShell or CMD:
 
 ```powershell
-dotnet build C:\Glassgram\Glassgram.slnx -c Debug
-dotnet publish C:\Glassgram\src\Glassgram\Glassgram.csproj -c Release -r win-x64 --self-contained true -o C:\Glassgram\release
+dotnet build Glassgram.slnx -c Debug
 ```
 
-В `C:\Glassgram\release` также создаётся ярлык `Glassgram.lnk`: его можно скопировать на рабочий стол или закрепить на панели задач.
+To publish a local self-contained x64 build:
 
-## Лицензия
+```powershell
+dotnet publish src/Glassgram/Glassgram.csproj -c Release -r win-x64 --self-contained true -o release
+```
 
-Исходный код Glassgram распространяется на условиях [GNU General Public License v3.0](LICENSE). При распространении бинарной версии необходимо одновременно предоставить соответствующий исходный код способом, разрешённым GPL-3.0, сохранить уведомления об авторских правах и приложить текст лицензии.
+The project documentation describes launching `release/Glassgram.exe`. Do not redistribute a release directory that has been used with a real account; prepare a clean package and include all required licenses and corresponding source code.
 
-Сторонние библиотеки сохраняют собственные лицензии. Их перечень и результат проверки совместимости приведены в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## Privacy and local data
 
-Для панели эмодзи/стикеров, профилей, общих материалов и управления анимацией адаптированы отдельные GPL-3.0-компоненты [Unigram](https://github.com/UnigramDev/Unigram) из commit `9354bcb753be3b16086bd3886b8adec062ccdd91`. Авторство, исходные файлы и изменения перечислены в `THIRD_PARTY_NOTICES.md`; интерфейс Unigram не копируется.
+TDLib session data is stored under `%LOCALAPPDATA%\Glassgram\Telegram`. The database encryption key is generated randomly and protected with Windows DPAPI for the current user. The project also documents DPAPI protection for API parameters and a local cache of up to 500 recent messages per chat.
 
-## Подготовка к публикации
+Local storage protection does not make ordinary Telegram chats end-to-end encrypted. The Telegram client still communicates with Telegram services. The optional Ollama integration is intended to support local AI processing; do not assume all AI providers or configurations keep data on-device.
 
-Не добавляйте в Git TDLib-сессии, базы Telegram, кэш сообщений, локальные настройки, `.env`, токены, API ID/API hash, номера телефонов и сборочные каталоги. Результат текущего аудита и повторяемый список проверок находятся в [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
+For the scope and limitations of the pre-publication review, see [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
+
+## Contributing
+
+Bug reports, reproducible test cases, accessibility feedback and code contributions are welcome once the repository is published. See [CONTRIBUTING.md](CONTRIBUTING.md) and [ROADMAP.md](ROADMAP.md).
+
+## License and acknowledgements
+
+Glassgram source code is licensed under [GNU GPL v3.0](LICENSE). Third-party components retain their own licenses. Selected components were adapted from [Unigram](https://github.com/UnigramDev/Unigram), including emoji and sticker-related functionality, with attribution recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Glassgram also relies on TDLib, Noto Color Emoji and other open-source and platform dependencies listed there.
+
+Binary redistribution requires compliance with the applicable licenses, including provision of corresponding source under GPL-3.0 and preservation of copyright and license notices.
