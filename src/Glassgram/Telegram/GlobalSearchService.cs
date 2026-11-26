@@ -19,18 +19,20 @@ internal static class GlobalSearchService
         if (!string.IsNullOrWhiteSpace(query))
         {
             var chatResults = await client.RequestAsync(new { @type = "searchChats", query, limit = ChatLimit }, token);
-            foreach (var chat in chatResults.Field("chats").Items())
+            foreach (var id in chatResults.Field("chat_ids").Items())
             {
-                var chatId = chat.Field("id").Number();
+                var chatId = id.Number();
                 if (!seenChatIds.Add(chatId)) continue;
-                chats.Add(BuildChatResult(chat));
+                var chat = await client.RequestAsync(new { @type = "getChat", chat_id = chatId }, token);
+                chats.Add(await BuildChatResultAsync(client, chat, token));
             }
 
             var contactResults = await client.RequestAsync(new { @type = "searchContacts", query, limit = ChatLimit }, token);
-            foreach (var user in contactResults.Field("users").Items())
+            foreach (var id in contactResults.Field("user_ids").Items())
             {
-                var userId = user.Field("id").Number();
+                var userId = id.Number();
                 if (!seenUserIds.Add(userId)) continue;
+                var user = await client.RequestAsync(new { @type = "getUser", user_id = userId }, token);
                 contacts.Add(BuildContactResult(user));
             }
         }
@@ -46,45 +48,35 @@ internal static class GlobalSearchService
 
         if (query.Length >= 3)
         {
-            if (query.StartsWith("@"))
+            var publicQuery = query.Trim().TrimStart('@');
+            if (query.StartsWith("@") && publicQuery.Length > 0)
             {
-                var username = query[1..];
-                var chat = await client.RequestAsync(new { @type = "searchPublicChat", username }, token);
-                if (chat.Field("@type").GetString() is "chat" or "supergroup" or "basicGroup" or "user")
+                try
                 {
+                    var chat = await client.RequestAsync(new { @type = "searchPublicChat", username = publicQuery }, token);
                     var chatId = chat.Field("id").Number();
                     if (seenChatIds.Add(chatId))
-                    {
-                        var result = BuildChatResult(chat);
-                        result.Type = chat.Field("@type").GetString() switch
-                        {
-                            "user" => "User",
-                            "chatTypePrivate" => "User",
-                            "chatTypeBasicGroup" => "Group",
-                            "chatTypeSupergroup" => "Channel",
-                            _ => "Chat"
-                        };
-                        chats.Add(result);
-                    }
+                        publicChats.Add(await BuildPublicChatResultAsync(client, chat, token));
                 }
+                catch (TdException ex) when (ex.Code == 404) { }
             }
-            else
-            {
-                var serverChats = await client.RequestAsync(new { @type = "searchChatsOnServer", query, limit = ChatLimit }, token);
-                foreach (var chat in serverChats.Field("chats").Items())
-                {
-                    var chatId = chat.Field("id").Number();
-                    if (!seenChatIds.Add(chatId)) continue;
-                    chats.Add(BuildChatResult(chat));
-                }
 
-                var publicResults = await client.RequestAsync(new { @type = "searchPublicChats", username = query }, token);
-                foreach (var chat in publicResults.Field("chats").Items())
-                {
-                    var chatId = chat.Field("id").Number();
-                    if (!seenChatIds.Add(chatId)) continue;
-                    publicChats.Add(BuildPublicChatResult(chat));
-                }
+            var serverChats = await client.RequestAsync(new { @type = "searchChatsOnServer", query, limit = ChatLimit }, token);
+            foreach (var id in serverChats.Field("chat_ids").Items())
+            {
+                var chatId = id.Number();
+                if (!seenChatIds.Add(chatId)) continue;
+                var chat = await client.RequestAsync(new { @type = "getChat", chat_id = chatId }, token);
+                chats.Add(await BuildChatResultAsync(client, chat, token));
+            }
+
+            var publicResults = await client.RequestAsync(new { @type = "searchPublicChats", query = publicQuery }, token);
+            foreach (var id in publicResults.Field("chat_ids").Items())
+            {
+                var chatId = id.Number();
+                if (!seenChatIds.Add(chatId)) continue;
+                var chat = await client.RequestAsync(new { @type = "getChat", chat_id = chatId }, token);
+                publicChats.Add(await BuildPublicChatResultAsync(client, chat, token));
             }
         }
 
@@ -138,24 +130,24 @@ internal static class GlobalSearchService
         return messages;
     }
 
-    public static async Task<List<SearchMessageResult>> SearchMessagesGlobalAsync(TdClient client, string query, long fromMessageId, int limit, CancellationToken token)
+    public static async Task<(List<SearchMessageResult> Messages, string NextOffset)> SearchMessagesGlobalAsync(TdClient client, string query, string offset, int limit, CancellationToken token)
     {
         var messages = new List<SearchMessageResult>();
         var seenMessageKeys = new HashSet<(long ChatId, long MessageId)>();
 
-        if (string.IsNullOrWhiteSpace(query)) return messages;
+        if (string.IsNullOrWhiteSpace(query)) return (messages, "");
 
         var result = await client.RequestAsync(new
         {
             @type = "searchMessages",
-            chat_id = 0,
+            chat_list = (object?)null,
             query,
-            filter = new { @type = "searchMessagesFilterEmpty" },
-            min_date = 0,
-            max_date = 0,
-            offset = 0,
+            offset,
             limit,
-            from_message_id = fromMessageId
+            filter = new { @type = "searchMessagesFilterEmpty" },
+            chat_type_filter = (object?)null,
+            min_date = 0,
+            max_date = 0
         }, token);
 
         foreach (var msg in result.Field("messages").Items())
@@ -180,7 +172,7 @@ internal static class GlobalSearchService
             });
         }
 
-        return messages;
+        return (messages, result.Field("next_offset").Text());
     }
 
     public static async Task<JsonElement?> GetChatAsync(TdClient client, long chatId, CancellationToken token)
@@ -213,19 +205,20 @@ internal static class GlobalSearchService
         catch (TdException) { return null; }
     }
 
-    private static SearchChatResult BuildChatResult(JsonElement chat)
+    private static async Task<SearchChatResult> BuildChatResultAsync(TdClient client, JsonElement chat, CancellationToken token)
     {
         var type = chat.Field("type").Field("@type").GetString() ?? "";
         var isPrivate = type == "chatTypePrivate";
         var isGroup = type == "chatTypeBasicGroup";
         var isChannel = type == "chatTypeSupergroup";
 
+        var (username, kind) = await GetChatMetadataAsync(client, chat, token);
         var result = new SearchChatResult
         {
             ChatId = chat.Field("id").Number(),
             Title = chat.Field("title").Text(),
-            Username = chat.Field("usernames").ValueKind == JsonValueKind.Array ? chat.Field("usernames").EnumerateArray().FirstOrDefault().Field("username").Text() : "",
-            Type = isPrivate ? "User" : isGroup ? "Group" : isChannel ? "Channel" : "Chat",
+            Username = username.Length == 0 ? "" : "@" + username,
+            Type = kind,
             IsVerified = chat.Field("is_verified").Flag(),
             IsScam = chat.Field("is_scam").Flag(),
             IsFake = chat.Field("is_fake").Flag(),
@@ -242,7 +235,7 @@ internal static class GlobalSearchService
             UserId = user.Field("id").Number(),
             FirstName = user.Field("first_name").Text(),
             LastName = user.Field("last_name").Text(),
-            Username = user.Field("usernames").ValueKind == JsonValueKind.Array ? user.Field("usernames").EnumerateArray().FirstOrDefault().Field("username").Text() : "",
+            Username = FormatUsername(user.Field("usernames")),
             PhoneNumber = user.Field("phone_number").Text(),
             IsVerified = user.Field("is_verified").Flag(),
             PhotoFileId = (int)user.Field("profile_photo").Field("small").Field("id").Number()
@@ -251,18 +244,19 @@ internal static class GlobalSearchService
         return result;
     }
 
-    private static SearchPublicChatResult BuildPublicChatResult(JsonElement chat)
+    private static async Task<SearchPublicChatResult> BuildPublicChatResultAsync(TdClient client, JsonElement chat, CancellationToken token)
     {
         var type = chat.Field("type").Field("@type").GetString() ?? "";
         var isGroup = type == "chatTypeBasicGroup";
         var isChannel = type == "chatTypeSupergroup";
 
+        var (username, kind) = await GetChatMetadataAsync(client, chat, token);
         var result = new SearchPublicChatResult
         {
             ChatId = chat.Field("id").Number(),
             Title = chat.Field("title").Text(),
-            Username = chat.Field("usernames").ValueKind == JsonValueKind.Array ? chat.Field("usernames").EnumerateArray().FirstOrDefault().Field("username").Text() : "",
-            Type = isGroup ? "Group" : isChannel ? "Channel" : "Chat",
+            Username = username.Length == 0 ? "" : "@" + username,
+            Type = kind,
             MembersCount = (int)chat.Field("member_count").Number(),
             IsVerified = chat.Field("is_verified").Flag(),
             IsScam = chat.Field("is_scam").Flag(),
@@ -271,5 +265,29 @@ internal static class GlobalSearchService
         };
         result.SetAvatar(chat.Field("photo").Field("small").Field("local").Field("path").Text());
         return result;
+    }
+
+    private static async Task<(string Username, string Kind)> GetChatMetadataAsync(TdClient client, JsonElement chat, CancellationToken token)
+    {
+        var type = chat.Field("type");
+        switch (type.Field("@type").GetString())
+        {
+            case "chatTypePrivate":
+                var user = await client.RequestAsync(new { @type = "getUser", user_id = type.Field("user_id").Number() }, token);
+                return (FormatUsername(user.Field("usernames")).TrimStart('@'), "Пользователь");
+            case "chatTypeBasicGroup":
+                return ("", "Группа");
+            case "chatTypeSupergroup":
+                var supergroup = await client.RequestAsync(new { @type = "getSupergroup", supergroup_id = type.Field("supergroup_id").Number() }, token);
+                return (FormatUsername(supergroup.Field("usernames")).TrimStart('@'), supergroup.Field("is_channel").Flag() ? "Канал" : "Группа");
+            default:
+                return ("", "Чат");
+        }
+    }
+
+    private static string FormatUsername(JsonElement usernames)
+    {
+        var active = usernames.Field("active_usernames").Items().FirstOrDefault().Text();
+        return active.Length == 0 ? "" : "@" + active;
     }
 }

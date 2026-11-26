@@ -70,7 +70,7 @@ Equal("searchChatsOnServer", searchChatsOnServer, "$searchChatsOnServer");
 var searchContacts = Parse(new { @type = "searchContacts", query = "test", limit = 50 });
 Equal("searchContacts", searchContacts, "$searchContacts");
 
-var searchPublicChats = Parse(new { @type = "searchPublicChats", username = "test" });
+var searchPublicChats = Parse(new { @type = "searchPublicChats", query = "test" });
 Equal("searchPublicChats", searchPublicChats, "$searchPublicChats");
 
 var searchPublicChat = Parse(new { @type = "searchPublicChat", username = "testchannel" });
@@ -79,14 +79,14 @@ Equal("searchPublicChat", searchPublicChat, "$searchPublicChat");
 var searchMessages = Parse(new
 {
     @type = "searchMessages",
-    chat_id = 0L,
+    chat_list = (object?)null,
     query = "test",
-    filter = new { @type = "searchMessagesFilterEmpty" },
-    min_date = 0,
-    max_date = 0,
-    offset = 0,
+    offset = "next-page-token",
     limit = 30,
-    from_message_id = 0L
+    filter = new { @type = "searchMessagesFilterEmpty" },
+    chat_type_filter = (object?)null,
+    min_date = 0,
+    max_date = 0
 });
 Equal("searchMessages", searchMessages, "$searchMessages");
 var filter = searchMessages.GetProperty("filter");
@@ -137,15 +137,7 @@ var currentGen = ++generation;
 var staleGen = currentGen - 1;
 if (staleGen == generation) throw new Exception("Generation check logic failed");
 
-// Pagination cursor test
-long lastCursor = 0;
-var pages = new List<long> { 100, 90, 80, 70, 60 };
-foreach (var cursor in pages)
-{
-    if (cursor >= lastCursor && lastCursor != 0)
-        throw new Exception("Pagination cursor should decrease");
-    lastCursor = cursor;
-}
-if (lastCursor != 60) throw new Exception("Pagination final cursor mismatch");
+if (searchMessages.GetProperty("offset").GetString() != "next-page-token") throw new Exception("searchMessages offset mismatch");
+if (searchMessages.TryGetProperty("from_message_id", out _)) throw new Exception("searchMessages must not contain from_message_id");
 
 Console.WriteLine("TDLib serialization regression tests passed.");

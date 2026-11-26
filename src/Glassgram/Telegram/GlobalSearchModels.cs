@@ -6,6 +6,7 @@ namespace Glassgram.Telegram;
 
 internal sealed class SearchChatResult : INotifyPropertyChanged
 {
+    public string SectionTitle { get; set; } = "";
     public long ChatId { get; init; }
     public string Title { get; set; } = "";
     public string Username { get; set; } = "";
@@ -29,6 +30,7 @@ internal sealed class SearchChatResult : INotifyPropertyChanged
 
 internal sealed class SearchMessageResult : INotifyPropertyChanged
 {
+    public string SectionTitle { get; set; } = "";
     public long ChatId { get; init; }
     public long MessageId { get; init; }
     public string ChatTitle { get; set; } = "";
@@ -37,6 +39,10 @@ internal sealed class SearchMessageResult : INotifyPropertyChanged
     public bool Outgoing { get; set; }
     public string TimeText => Date == DateTime.MinValue ? "" : Date.Date == DateTime.Today ? Date.ToString("HH:mm") : Date.ToString("dd.MM.yy");
     public string SenderName { get; set; } = "";
+    public string Title => ChatTitle;
+    public string Username => "";
+    public string Type => "Сообщение";
+    public string AvatarLetter => ChatTitle.Length > 0 ? ChatTitle[..1].ToUpperInvariant() : "•";
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void Raise(string name) => PropertyChanged?.Invoke(this, new(name));
@@ -44,12 +50,15 @@ internal sealed class SearchMessageResult : INotifyPropertyChanged
 
 internal sealed class SearchContactResult : INotifyPropertyChanged
 {
+    public string SectionTitle { get; set; } = "";
     public long UserId { get; init; }
     public string FirstName { get; set; } = "";
     public string LastName { get; set; } = "";
     public string Username { get; set; } = "";
     public string PhoneNumber { get; set; } = "";
     public string DisplayName => $"{FirstName} {LastName}".Trim();
+    public string Title => DisplayName;
+    public string Type => "Контакт";
     public string AvatarLetter => DisplayName.Length > 0 ? DisplayName[..1].ToUpperInvariant() : "•";
     public ImageSource? Avatar { get; set; }
     public int PhotoFileId { get; set; }
@@ -67,6 +76,7 @@ internal sealed class SearchContactResult : INotifyPropertyChanged
 
 internal sealed class SearchPublicChatResult : INotifyPropertyChanged
 {
+    public string SectionTitle { get; set; } = "";
     public long ChatId { get; init; }
     public string Title { get; set; } = "";
     public string Username { get; set; } = "";
@@ -110,6 +120,5 @@ internal sealed class GlobalSearchState
     public string? Error { get; set; }
     public bool IsLoadingMoreMessages { get; set; }
     public bool HasMoreMessages { get; set; }
-    public long LastMessageId { get; set; }
-    public long LastMessageFromMessageId { get; set; }
+    public string NextMessageOffset { get; set; } = "";
 }

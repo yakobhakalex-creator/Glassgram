@@ -22,6 +22,7 @@ public partial class MainWindow
     {
         if (sender is not TextBox box) return;
         var query = box.Text.Trim();
+        var queryChanged = !string.Equals(searchState.Query, query, StringComparison.Ordinal);
         searchState.Query = query;
         searchState.Generation++;
         searchState.Cts?.Cancel();
@@ -33,12 +34,21 @@ public partial class MainWindow
             RefreshChatList();
             return;
         }
+        if (queryChanged)
+        {
+            searchState.Chats.Clear();
+            searchState.Contacts.Clear();
+            searchState.Messages.Clear();
+            searchState.PublicChats.Clear();
+            searchState.NextMessageOffset = "";
+            searchState.HasMoreMessages = false;
+        }
         searchActive = true;
         searchState.IsSearching = true;
         searchState.HasSearched = true;
         searchState.Error = null;
         SearchUI.Visibility = Visibility.Visible;
-        ChatList.ItemsSource = null;
+        ChatList.Visibility = Visibility.Collapsed;
         searchDebounce.Start();
         UpdateSearchUI();
     }
@@ -51,11 +61,12 @@ public partial class MainWindow
         searchState.PublicChats.Clear();
         searchState.HasMoreMessages = false;
         searchState.IsLoadingMoreMessages = false;
-        searchState.LastMessageId = 0;
-        searchState.LastMessageFromMessageId = 0;
+        searchState.NextMessageOffset = "";
         searchActive = false;
         searchState.IsSearching = false;
         SearchUI.Visibility = Visibility.Collapsed;
+        SearchResultsList.ItemsSource = null;
+        ChatList.Visibility = Visibility.Visible;
         ChatList.ItemsSource = visibleChats;
     }
 
@@ -91,7 +102,11 @@ public partial class MainWindow
         results.AddRange(searchState.Contacts);
         results.AddRange(searchState.PublicChats);
         results.AddRange(searchState.Messages);
-        ChatList.ItemsSource = results;
+        if (searchState.Chats.Count > 0) searchState.Chats[0].SectionTitle = "Чаты и контакты";
+        else if (searchState.Contacts.Count > 0) searchState.Contacts[0].SectionTitle = "Чаты и контакты";
+        if (searchState.PublicChats.Count > 0) searchState.PublicChats[0].SectionTitle = "Результаты общего поиска";
+        if (searchState.Messages.Count > 0) searchState.Messages[0].SectionTitle = "Сообщения";
+        SearchResultsList.ItemsSource = results;
         LoadMoreSearchMessages.Visibility = searchState.HasMoreMessages && !searchState.IsLoadingMoreMessages ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -146,7 +161,8 @@ public partial class MainWindow
             // Global message search from 3 characters
             if (query.Length >= 3)
             {
-                var messages = await GlobalSearchService.SearchMessagesGlobalAsync(telegram, query, 0, GlobalSearchService.MessageLimit, token);
+                var page = await GlobalSearchService.SearchMessagesGlobalAsync(telegram, query, "", GlobalSearchService.MessageLimit, token);
+                var messages = page.Messages;
                 if (generation != searchState.Generation) return;
                 foreach (var m in messages)
                     if (searchState.Messages.All(x => x.ChatId != m.ChatId || x.MessageId != m.MessageId))
@@ -156,12 +172,8 @@ public partial class MainWindow
                 await EnrichMessageChatTitlesAsync(token);
                 if (generation != searchState.Generation) return;
 
-                searchState.HasMoreMessages = messages.Count >= GlobalSearchService.MessageLimit;
-                if (messages.Count > 0)
-                {
-                    searchState.LastMessageId = messages[^1].MessageId;
-                    searchState.LastMessageFromMessageId = 0;
-                }
+                searchState.NextMessageOffset = page.NextOffset;
+                searchState.HasMoreMessages = page.NextOffset.Length > 0;
             }
 
             // Download avatars for new results
@@ -232,19 +244,16 @@ public partial class MainWindow
         var token = searchState.Cts?.Token ?? CancellationToken.None;
         try
         {
-            var messages = await GlobalSearchService.SearchMessagesGlobalAsync(telegram, searchState.Query, searchState.LastMessageId, GlobalSearchService.MessageLimit, token);
+            var page = await GlobalSearchService.SearchMessagesGlobalAsync(telegram, searchState.Query, searchState.NextMessageOffset, GlobalSearchService.MessageLimit, token);
+            var messages = page.Messages;
             if (generation != searchState.Generation) return;
             foreach (var m in messages)
                 if (searchState.Messages.All(x => x.ChatId != m.ChatId || x.MessageId != m.MessageId))
                     searchState.Messages.Add(m);
             await EnrichMessageChatTitlesAsync(token);
             if (generation != searchState.Generation) return;
-            searchState.HasMoreMessages = messages.Count >= GlobalSearchService.MessageLimit;
-            if (messages.Count > 0)
-            {
-                searchState.LastMessageId = messages[^1].MessageId;
-                searchState.LastMessageFromMessageId = 0;
-            }
+            searchState.NextMessageOffset = page.NextOffset;
+            searchState.HasMoreMessages = page.NextOffset.Length > 0;
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) when (ex is TdException or JsonException)
@@ -263,8 +272,8 @@ public partial class MainWindow
 
     private async void SelectSearchResult(object sender, SelectionChangedEventArgs args)
     {
-        if (ChatList.SelectedItem is not { } item) return;
-        ChatList.SelectedItem = null; // Allow re-selection
+        if (SearchResultsList.SelectedItem is not { } item) return;
+        SearchResultsList.SelectedItem = null; // Allow re-selection
 
         switch (item)
         {
@@ -290,17 +299,9 @@ public partial class MainWindow
                 }
                 break;
             case SearchPublicChatResult publicChat:
-                // Do NOT auto-join; just open if already in chat list
-                if (knownChats.ContainsKey(publicChat.ChatId))
-                {
-                    await OpenChatAsync(publicChat.ChatId);
-                    ClearSearchResults();
-                    ChatSearch.Text = "";
-                }
-                else
-                {
-                    MessengerStatus.Text = "Этот чат/канал не в вашем списке. Перейдите по ссылке или найдите в Telegram.";
-                }
+                await OpenChatAsync(publicChat.ChatId);
+                ClearSearchResults();
+                ChatSearch.Text = "";
                 break;
             case SearchMessageResult message:
                 await OpenChatAsync(message.ChatId);
