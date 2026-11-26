@@ -15,6 +15,7 @@ public partial class MainWindow
 
     private void InitializeSearch()
     {
+        SearchResultsList.ItemsSource = searchState.Results;
         searchDebounce.Tick += async (_, _) => await PerformSearchAsync(searchState.Query, searchState.Generation);
     }
 
@@ -40,6 +41,7 @@ public partial class MainWindow
             searchState.Contacts.Clear();
             searchState.Messages.Clear();
             searchState.PublicChats.Clear();
+            searchState.Results.Clear();
             searchState.NextMessageOffset = "";
             searchState.HasMoreMessages = false;
         }
@@ -59,13 +61,13 @@ public partial class MainWindow
         searchState.Contacts.Clear();
         searchState.Messages.Clear();
         searchState.PublicChats.Clear();
+        searchState.Results.Clear();
         searchState.HasMoreMessages = false;
         searchState.IsLoadingMoreMessages = false;
         searchState.NextMessageOffset = "";
         searchActive = false;
         searchState.IsSearching = false;
         SearchUI.Visibility = Visibility.Collapsed;
-        SearchResultsList.ItemsSource = null;
         ChatList.Visibility = Visibility.Visible;
         ChatList.ItemsSource = visibleChats;
     }
@@ -92,47 +94,42 @@ public partial class MainWindow
         SearchErrorText.Text = searchState.Error ?? "";
         SearchErrorText.Visibility = searchState.Error != null ? Visibility.Visible : Visibility.Collapsed;
 
-        if (searchActive) RenderSearchResults();
+        if (searchActive) SyncSearchResults();
     }
 
-    private void RenderSearchResults()
+    private void SyncSearchResults()
     {
-        var results = new List<object>();
-        results.AddRange(searchState.Chats);
-        results.AddRange(searchState.Contacts);
-        results.AddRange(searchState.PublicChats);
-        results.AddRange(searchState.Messages);
         if (searchState.Chats.Count > 0) searchState.Chats[0].SectionTitle = "Чаты и контакты";
         else if (searchState.Contacts.Count > 0) searchState.Contacts[0].SectionTitle = "Чаты и контакты";
         if (searchState.PublicChats.Count > 0) searchState.PublicChats[0].SectionTitle = "Результаты общего поиска";
         if (searchState.Messages.Count > 0) searchState.Messages[0].SectionTitle = "Сообщения";
-        SearchResultsList.ItemsSource = results;
+        var desired = searchState.Chats.Cast<object>()
+            .Concat(searchState.Contacts)
+            .Concat(searchState.PublicChats)
+            .Concat(searchState.Messages)
+            .ToArray();
+        for (var index = 0; index < desired.Length; index++)
+        {
+            var key = SearchResultKey(desired[index]);
+            if (index < searchState.Results.Count && SearchResultKey(searchState.Results[index]) == key) continue;
+            var existing = -1;
+            for (var candidate = index + 1; candidate < searchState.Results.Count; candidate++)
+                if (SearchResultKey(searchState.Results[candidate]) == key) { existing = candidate; break; }
+            if (existing >= 0) searchState.Results.Move(existing, index);
+            else searchState.Results.Insert(index, desired[index]);
+        }
+        while (searchState.Results.Count > desired.Length) searchState.Results.RemoveAt(searchState.Results.Count - 1);
         LoadMoreSearchMessages.Visibility = searchState.HasMoreMessages && !searchState.IsLoadingMoreMessages ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void SearchContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    private static string SearchResultKey(object item) => item switch
     {
-        if (args.Item is SearchChatResult chat)
-        {
-            if (args.InRecycleQueue) args.ItemContainer.ContentTemplate = null;
-            else if (chat.Avatar is not null && args.ItemContainer.ContentTemplate is DataTemplate template)
-            {
-                // Template already binds Avatar
-            }
-        }
-        else if (args.Item is SearchContactResult contact)
-        {
-            if (args.InRecycleQueue) args.ItemContainer.ContentTemplate = null;
-        }
-        else if (args.Item is SearchPublicChatResult publicChat)
-        {
-            if (args.InRecycleQueue) args.ItemContainer.ContentTemplate = null;
-        }
-        else if (args.Item is SearchMessageResult message)
-        {
-            if (args.InRecycleQueue) args.ItemContainer.ContentTemplate = null;
-        }
-    }
+        SearchChatResult chat => $"chat:{chat.ChatId}",
+        SearchContactResult contact => $"contact:{contact.UserId}",
+        SearchPublicChatResult chat => $"public:{chat.ChatId}",
+        SearchMessageResult message => $"message:{message.ChatId}:{message.MessageId}",
+        _ => item.GetHashCode().ToString()
+    };
 
     private async Task PerformSearchAsync(string query, int generation)
     {
@@ -148,6 +145,7 @@ public partial class MainWindow
             if (generation != searchState.Generation) return;
             foreach (var c in localChats) if (searchState.Chats.All(x => x.ChatId != c.ChatId)) searchState.Chats.Add(c);
             foreach (var c in localContacts) if (searchState.Contacts.All(x => x.UserId != c.UserId)) searchState.Contacts.Add(c);
+            UpdateSearchUI();
 
             // Server search from 3 characters
             if (query.Length >= 3)
@@ -156,6 +154,7 @@ public partial class MainWindow
                 if (generation != searchState.Generation) return;
                 foreach (var c in serverChats) if (searchState.Chats.All(x => x.ChatId != c.ChatId)) searchState.Chats.Add(c);
                 foreach (var c in publicChats) if (searchState.PublicChats.All(x => x.ChatId != c.ChatId)) searchState.PublicChats.Add(c);
+                UpdateSearchUI();
             }
 
             // Global message search from 3 characters
@@ -174,6 +173,7 @@ public partial class MainWindow
 
                 searchState.NextMessageOffset = page.NextOffset;
                 searchState.HasMoreMessages = page.NextOffset.Length > 0;
+                UpdateSearchUI();
             }
 
             // Download avatars for new results
@@ -254,6 +254,7 @@ public partial class MainWindow
             if (generation != searchState.Generation) return;
             searchState.NextMessageOffset = page.NextOffset;
             searchState.HasMoreMessages = page.NextOffset.Length > 0;
+            UpdateSearchUI();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) when (ex is TdException or JsonException)

@@ -100,7 +100,7 @@
                 </StackPanel>
                 <TextBlock x:Name="SearchErrorText" Grid.Row="1" Foreground="#FFB8AC" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"/>
                 <TextBlock x:Name="EmptySearchResults" Grid.Row="2" Text="Ничего не найдено" FontSize="14" Opacity="0.6" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
-                <ListView x:Name="SearchResultsList" Grid.Row="3" SelectionMode="Single" SelectionChanged="SelectSearchResult" ContainerContentChanging="SearchContainerChanging" Background="Transparent" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <ListView x:Name="SearchResultsList" Grid.Row="3" SelectionMode="Single" SelectionChanged="SelectSearchResult" Background="Transparent" ScrollViewer.VerticalScrollBarVisibility="Auto">
                   <ListView.ItemTemplate>
                     <DataTemplate>
                       <Grid Padding="8,5" ColumnSpacing="11" MinHeight="66">

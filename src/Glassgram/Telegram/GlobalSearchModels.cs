@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 
@@ -6,7 +7,8 @@ namespace Glassgram.Telegram;
 
 internal sealed class SearchChatResult : INotifyPropertyChanged
 {
-    public string SectionTitle { get; set; } = "";
+    private string sectionTitle = "";
+    public string SectionTitle { get => sectionTitle; set { if (sectionTitle == value) return; sectionTitle = value; Raise(nameof(SectionTitle)); } }
     public long ChatId { get; init; }
     public string Title { get; set; } = "";
     public string Username { get; set; } = "";
@@ -30,10 +32,12 @@ internal sealed class SearchChatResult : INotifyPropertyChanged
 
 internal sealed class SearchMessageResult : INotifyPropertyChanged
 {
-    public string SectionTitle { get; set; } = "";
+    private string sectionTitle = "";
+    private string chatTitle = "";
+    public string SectionTitle { get => sectionTitle; set { if (sectionTitle == value) return; sectionTitle = value; Raise(nameof(SectionTitle)); } }
     public long ChatId { get; init; }
     public long MessageId { get; init; }
-    public string ChatTitle { get; set; } = "";
+    public string ChatTitle { get => chatTitle; set { if (chatTitle == value) return; chatTitle = value; Raise(nameof(ChatTitle)); Raise(nameof(Title)); Raise(nameof(AvatarLetter)); } }
     public string Preview { get; set; } = "";
     public DateTime Date { get; set; }
     public bool Outgoing { get; set; }
@@ -50,7 +54,8 @@ internal sealed class SearchMessageResult : INotifyPropertyChanged
 
 internal sealed class SearchContactResult : INotifyPropertyChanged
 {
-    public string SectionTitle { get; set; } = "";
+    private string sectionTitle = "";
+    public string SectionTitle { get => sectionTitle; set { if (sectionTitle == value) return; sectionTitle = value; Raise(nameof(SectionTitle)); } }
     public long UserId { get; init; }
     public string FirstName { get; set; } = "";
     public string LastName { get; set; } = "";
@@ -76,7 +81,8 @@ internal sealed class SearchContactResult : INotifyPropertyChanged
 
 internal sealed class SearchPublicChatResult : INotifyPropertyChanged
 {
-    public string SectionTitle { get; set; } = "";
+    private string sectionTitle = "";
+    public string SectionTitle { get => sectionTitle; set { if (sectionTitle == value) return; sectionTitle = value; Raise(nameof(SectionTitle)); } }
     public long ChatId { get; init; }
     public string Title { get; set; } = "";
     public string Username { get; set; } = "";
@@ -117,6 +123,7 @@ internal sealed class GlobalSearchState
     public List<SearchMessageResult> Messages { get; } = [];
     public List<SearchContactResult> Contacts { get; } = [];
     public List<SearchPublicChatResult> PublicChats { get; } = [];
+    public ObservableCollection<object> Results { get; } = [];
     public string? Error { get; set; }
     public bool IsLoadingMoreMessages { get; set; }
     public bool HasMoreMessages { get; set; }
