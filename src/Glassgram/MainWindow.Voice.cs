@@ -1,9 +1,5 @@
 // Voice-note interaction and waveform behavior adapted from Unigram (GPL-3.0),
 // commit 9354bcb753be3b16086bd3886b8adec062ccdd91. Ogg/Opus encoding uses Concentus.
-using Concentus.Enums;
-using Concentus.Oggfile;
-using Concentus.Structs;
-using Concentus;
 using Glassgram.Telegram;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -82,30 +78,11 @@ public partial class MainWindow
         {
             var bytes = pcm.ToArray(); pcm.Dispose();
             var samples = new short[bytes.Length / 2]; Buffer.BlockCopy(bytes, 0, samples, 0, bytes.Length);
-            const int rate = 48000;
-            if (samples.Length < rate / 2) throw new InvalidOperationException("Голосовое сообщение слишком короткое.");
             var voiceFolder = Path.Combine(Path.GetTempPath(), "Glassgram", "Voice"); Directory.CreateDirectory(voiceFolder);
             var opusPath = Path.Combine(voiceFolder, $"voice-{Guid.NewGuid():N}.ogg");
-            var encoder = OpusCodecFactory.CreateEncoder(48000, 1, OpusApplication.OPUS_APPLICATION_VOIP);
-            encoder.Bitrate = 32000;
-            using (var output = File.Create(opusPath))
-            {
-                var writer = new OpusOggWriteStream(encoder, output, new OpusTags(), inputSampleRate: rate);
-                writer.WriteSamples(samples, 0, samples.Length);
-                writer.Finish();
-            }
-            var duration = Math.Max(1, (int)Math.Ceiling(samples.Length / (double)rate));
+            var voiceFile = VoiceNotePipeline.Encode(opusPath, samples);
             var waveform = BuildTelegramWaveform(samples);
-            var result = await telegram!.RequestAsync(new
-            {
-                @type = "sendMessage", chat_id = chatId, topic_id = (object?)null, reply_to = (object?)null, options = (object?)null, reply_markup = (object?)null,
-                input_message_content = new
-                {
-                    @type = "inputMessageVoiceNote",
-                    voice_note = new { @type = "inputVoiceNote", voice_note = new { @type = "inputFileLocal", path = opusPath }, duration, waveform },
-                    caption = new { @type = "formattedText", text = "", entities = Array.Empty<object>() }, self_destruct_type = (object?)null
-                }
-            }, lifetime.Token);
+            var result = await telegram!.RequestAsync(VoiceNotePipeline.BuildSendRequest(chatId, voiceFile, waveform), lifetime.Token);
             InsertMessage(result);
             MessengerStatus.Text = "";
         }

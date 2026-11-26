@@ -17,22 +17,28 @@ var history = Parse(new { @type = "getChatHistory", chat_id = 42L, from_message_
 Equal("getChatHistory", history, "$history");
 if (history.GetProperty("@extra").GetInt64() != 9) throw new Exception("getChatHistory: @extra missing");
 
-var voice = Parse(new
-{
-    @type = "sendMessage", chat_id = 42L, topic_id = (object?)null, reply_to = (object?)null, options = (object?)null, reply_markup = (object?)null,
-    input_message_content = new
-    {
-        @type = "inputMessageVoiceNote",
-        voice_note = new { @type = "inputVoiceNote", voice_note = new { @type = "inputFileLocal", path = "C:\\Temp\\voice.ogg" }, duration = 2, waveform = "AQID" },
-        caption = new { @type = "formattedText", text = "", entities = Array.Empty<object>() }, self_destruct_type = (object?)null
-    }
-});
+var voice = Parse(VoiceNotePipeline.BuildSendRequest(42, new VoiceNoteFile("C:\\Temp\\voice.ogg", 2, 96000), "AQID"));
 Equal("sendMessage", voice, "$voice");
 var voiceContent = voice.GetProperty("input_message_content");
 Equal("inputMessageVoiceNote", voiceContent, "$voice.input_message_content");
 Equal("inputVoiceNote", voiceContent.GetProperty("voice_note"), "$voice.input_message_content.voice_note");
 Equal("inputFileLocal", voiceContent.GetProperty("voice_note").GetProperty("voice_note"), "$voice.input_message_content.voice_note.voice_note");
 Equal("formattedText", voiceContent.GetProperty("caption"), "$voice.input_message_content.caption");
+
+var syntheticPath = Path.Combine(Path.GetTempPath(), $"glassgram-voice-test-{Guid.NewGuid():N}.ogg");
+try
+{
+    var pcm = new short[VoiceNotePipeline.SampleRate * 2];
+    for (var i = 0; i < pcm.Length; i++) pcm[i] = (short)(Math.Sin(2 * Math.PI * 440 * i / VoiceNotePipeline.SampleRate) * 8000);
+    var encoded = VoiceNotePipeline.Encode(syntheticPath, pcm);
+    if (encoded.Duration != 2 || encoded.DecodedSamples < pcm.Length)
+        throw new Exception($"Synthetic voice validation failed: duration={encoded.Duration}, decoded={encoded.DecodedSamples}.");
+    var bytes = File.ReadAllBytes(syntheticPath);
+    var head = bytes.AsSpan().IndexOf("OpusHead"u8);
+    if (head < 0 || bytes[head + 10] == 0 && bytes[head + 11] == 0)
+        throw new Exception("OpusHead or pre-skip is invalid.");
+}
+finally { File.Delete(syntheticPath); }
 
 var reaction = Parse(new { @type = "addMessageReaction", chat_id = 42L, message_id = 7L, reaction_type = new { @type = "reactionTypeEmoji", emoji = "👍" }, is_big = false, update_recent_reactions = true });
 Equal("reactionTypeEmoji", reaction.GetProperty("reaction_type"), "$reaction.reaction_type");
