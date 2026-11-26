@@ -60,6 +60,12 @@ public partial class MainWindow
         ProfileAvatarBrush.ImageSource = chat.Avatar;
         ProfileUsername.Text = "";
         ProfileDescription.Text = "";
+        ProfileMembersSection.Visibility = Visibility.Collapsed;
+        ProfileMemberSearch.Text = "";
+        memberQuery = "";
+        memberCategory = "members";
+        memberLoadGeneration++;
+        profileMembers.Clear();
         ProfileStatus.Text = ActiveChatStatus.Text;
         ProfileKind.Text = chat.UserId != 0 ? "Пользователь" : chat.BasicGroupId != 0 ? "Группа" : "Канал или супергруппа";
         ProfileMediaCount.Text = ProfileFileCount.Text = ProfileLinkCount.Text = "…";
@@ -86,6 +92,7 @@ public partial class MainWindow
                 ProfileStatus.Text = $"{group.Field("member_count").Number()} участников";
                 ProfileDescription.Text = full.Field("description").Text();
                 ProfileKind.Text = "Группа";
+                await PrepareMembersAsync(chat, full);
             }
             else if (chat.SupergroupId != 0)
             {
@@ -96,6 +103,7 @@ public partial class MainWindow
                 ProfileStatus.Text = $"{group.Field("member_count").Number()} участников";
                 ProfileDescription.Text = full.Field("description").Text();
                 ProfileKind.Text = group.Field("is_channel").Flag() ? "Канал" : "Супергруппа";
+                await PrepareMembersAsync(chat, full);
             }
             var counts = await Task.WhenAll(
                 GetSharedCountAsync(chat.Id, "searchMessagesFilterPhotoAndVideo"),

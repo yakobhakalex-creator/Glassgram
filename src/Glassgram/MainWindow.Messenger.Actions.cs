@@ -108,6 +108,9 @@ public partial class MainWindow
             case "updateUserStatus":
                 UpdateUserStatus(update);
                 break;
+            case "updateChatMember":
+                RefreshProfileMembers(update);
+                break;
             case "updateChatAction":
                 UpdateChatAction(update);
                 break;

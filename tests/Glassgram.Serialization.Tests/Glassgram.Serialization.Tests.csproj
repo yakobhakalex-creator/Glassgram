@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\src\Glassgram\Telegram\TdRequestSerializer.cs" Link="TdRequestSerializer.cs" />
+    <Compile Include="..\..\src\Glassgram\Telegram\ChatMemberPolicy.cs" Link="ChatMemberPolicy.cs" />
     <Compile Include="..\..\src\Glassgram\Telegram\VoiceNotePipeline.cs" Link="VoiceNotePipeline.cs" />
     <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="Concentus.Oggfile" Version="1.0.7" />

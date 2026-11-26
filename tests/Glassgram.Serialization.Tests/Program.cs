@@ -198,4 +198,45 @@ var folderGeneration = 4;
 var requestedFolderGeneration = folderGeneration++;
 if (requestedFolderGeneration == folderGeneration) throw new Exception("Folder stale-switch guard regression");
 
+// Group members: root and all nested polymorphic TDLib objects retain @type.
+var sender = new { @type = "messageSenderUser", user_id = 77L };
+var rights = new
+{
+    @type = "chatAdministratorRights", can_manage_chat = true, can_change_info = false, can_post_messages = false,
+    can_edit_messages = false, can_delete_messages = true, can_invite_users = true, can_restrict_members = true,
+    can_pin_messages = false, can_manage_topics = false, can_promote_members = true, can_manage_video_chats = false,
+    can_post_stories = false, can_edit_stories = false, can_delete_stories = false, can_manage_direct_messages = false,
+    can_manage_tags = false, is_anonymous = false
+};
+var adminStatus = new { @type = "chatMemberStatusAdministrator", can_be_edited = true, rights };
+var setAdmin = Parse(new { @type = "setChatMemberStatus", chat_id = 42L, member_id = sender, status = adminStatus });
+Equal("setChatMemberStatus", setAdmin, "$setAdmin");
+Equal("messageSenderUser", setAdmin.GetProperty("member_id"), "$setAdmin.member_id");
+Equal("chatMemberStatusAdministrator", setAdmin.GetProperty("status"), "$setAdmin.status");
+Equal("chatAdministratorRights", setAdmin.GetProperty("status").GetProperty("rights"), "$setAdmin.status.rights");
+
+var permissions = new
+{
+    @type = "chatPermissions", can_send_basic_messages = false, can_send_audios = false, can_send_documents = false,
+    can_send_photos = false, can_send_videos = false, can_send_video_notes = false, can_send_voice_notes = false,
+    can_send_polls = false, can_send_other_messages = false, can_add_link_previews = false, can_change_info = false,
+    can_invite_users = false, can_pin_messages = false, can_create_topics = false
+};
+var restrictedStatus = new { @type = "chatMemberStatusRestricted", is_member = true, restricted_until_date = 0, permissions };
+var setRestricted = Parse(new { @type = "setChatMemberStatus", chat_id = 42L, member_id = sender, status = restrictedStatus });
+Equal("chatMemberStatusRestricted", setRestricted.GetProperty("status"), "$setRestricted.status");
+Equal("chatPermissions", setRestricted.GetProperty("status").GetProperty("permissions"), "$setRestricted.status.permissions");
+Equal("banChatMember", Parse(new { @type = "banChatMember", chat_id = 42L, member_id = sender, banned_until_date = 0, revoke_messages = false }), "$banMember");
+Equal("addChatMember", Parse(new { @type = "addChatMember", chat_id = 42L, user_id = 77L, forward_limit = 0 }), "$addMember");
+var membersPage = Parse(new { @type = "getSupergroupMembers", supergroup_id = 9L, filter = new { @type = "supergroupMembersFilterSearch", query = "anna" }, offset = 50, limit = 50 });
+Equal("supergroupMembersFilterSearch", membersPage.GetProperty("filter"), "$membersPage.filter");
+if (membersPage.GetProperty("offset").GetInt32() != 50) throw new Exception("Member pagination offset regression");
+Equal("searchChatMembers", Parse(new { @type = "searchChatMembers", chat_id = 42L, query = "anna", limit = 200, filter = (object?)null }), "$searchChatMembers");
+
+var ownerCapabilities = ChatMemberPolicy.GetCapabilities(Parse(new { @type = "chatMemberStatusCreator" }), Parse(new { @type = "chatMemberStatusAdministrator", can_be_edited = false, rights }));
+if (ownerCapabilities.CanPromote) throw new Exception("Uneditable administrator must not be manageable");
+var adminCapabilities = ChatMemberPolicy.GetCapabilities(Parse(adminStatus), Parse(new { @type = "chatMemberStatusMember", member_until_date = 0 }));
+if (!adminCapabilities.CanPromote || !adminCapabilities.CanRestrict || !adminCapabilities.CanInvite) throw new Exception("Administrator capability regression");
+if (ChatMemberPolicy.IsCurrent(4, 5, 42, 42) || ChatMemberPolicy.IsCurrent(5, 5, 42, 41)) throw new Exception("Member stale-response guard regression");
+
 Console.WriteLine("TDLib serialization regression tests passed.");
