@@ -633,10 +633,11 @@ public partial class MainWindow
         {
             var message = await telegram.RequestAsync(new
             {
-                @type = "sendMessage", chat_id = activeChat.Id, topic_id = (object?)null, reply_to = (object?)null,
+                @type = "sendMessage", chat_id = ActiveSendChatId, topic_id = ActiveTopicId, reply_to = (object?)null,
                 options = (object?)null, reply_markup = (object?)null, input_message_content = content
             }, lifetime.Token);
-            InsertMessage(message);
+            var sent = MessageRow.FromJson(message);
+            if (activeHistoryContext is not null) InsertContextMessage(sent); else InsertMessage(message);
             MessengerStatus.Text = "";
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException)

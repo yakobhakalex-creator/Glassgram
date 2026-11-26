@@ -175,6 +175,12 @@ internal sealed partial class MessageRow : INotifyPropertyChanged
     public bool Failed { get; init; }
     public bool IsDate { get; init; }
     public string RawJson { get; init; } = "";
+    public int ForumTopicId { get; init; }
+    public long MessageThreadId { get; init; }
+    public int ReplyCount { get; private set; }
+    public string CommentsLabel => ReplyCount == 1 ? "1 комментарий" : $"{ReplyCount} комментариев";
+    public Visibility CommentsVisibility => ReplyCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public void SetReplyCount(int count) { ReplyCount = Math.Max(0, count); NotifyPropertyChanged(nameof(CommentsLabel)); NotifyPropertyChanged(nameof(CommentsVisibility)); }
     public string MediaKind { get; private set; } = "";
     public string StickerFormat { get; private set; } = "";
     public int PrimaryFileId { get; private set; }
@@ -246,9 +252,12 @@ internal sealed partial class MessageRow : INotifyPropertyChanged
             Pending = message.Field("sending_state").Field("@type").Text() == "messageSendingStatePending",
             Failed = message.Field("sending_state").Field("@type").Text() == "messageSendingStateFailed",
             RawJson = message.GetRawText()
+            ,ForumTopicId = (int)message.Field("topic_id").Field("forum_topic_id").Number()
+            ,MessageThreadId = message.Field("message_thread_id").Number()
         };
         row.ReadMedia(message.Field("content"));
         row.ApplyReactionInfo(message.Field("interaction_info").Field("reactions"));
+        row.ReplyCount = (int)message.Field("interaction_info").Field("reply_info").Field("reply_count").Number();
         row.SetPinned(message.Field("is_pinned").Flag());
         return row;
     }

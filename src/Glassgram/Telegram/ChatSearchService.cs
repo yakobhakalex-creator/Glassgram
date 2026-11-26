@@ -8,11 +8,11 @@ internal static class ChatSearchService
 {
     internal const int PageSize = 50;
 
-    internal static object BuildRequest(long chatId, string query, long fromMessageId, object? senderId, object? filter) => new
+    internal static object BuildRequest(long chatId, string query, long fromMessageId, object? senderId, object? filter, object? topicId = null) => new
     {
         @type = "searchChatMessages",
         chat_id = chatId,
-        topic_id = (object?)null,
+        topic_id = topicId,
         query,
         sender_id = senderId,
         from_message_id = fromMessageId,
@@ -22,9 +22,9 @@ internal static class ChatSearchService
     };
 
     internal static async Task<ChatSearchPage> SearchAsync(
-        TdClient client, long chatId, string query, long fromMessageId, object? senderId, object? filter, CancellationToken token)
+        TdClient client, long chatId, string query, long fromMessageId, object? senderId, object? filter, CancellationToken token, object? topicId = null)
     {
-        var result = await client.RequestAsync(BuildRequest(chatId, query, fromMessageId, senderId, filter), token);
+        var result = await client.RequestAsync(BuildRequest(chatId, query, fromMessageId, senderId, filter, topicId), token);
         var total = (int)result.Field("total_count").Number();
         return new ChatSearchPage(
             result.Field("messages").Items().Where(message => message.ValueKind == JsonValueKind.Object).Select(message => message.Clone()).ToArray(),

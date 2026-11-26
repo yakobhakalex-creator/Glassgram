@@ -12,11 +12,15 @@ public partial class MainWindow
     {
         var chatId = update.Field("chat_id").Number();
         var messageId = update.Field("message_id").Number();
-        if (!histories.TryGetValue(chatId, out var history) || !history.Messages.TryGetValue(messageId, out var row)) return;
+        MessageRow? row = null;
+        if (activeHistoryContext is HistoryContext context && contextualHistories.TryGetValue(context, out var contextual)) contextual.Messages.TryGetValue(messageId, out row);
+        if (row is null && histories.TryGetValue(chatId, out var history)) history.Messages.TryGetValue(messageId, out row);
+        if (row is null) return;
         if (update.Field("@type").Text() == "updateMessageInteractionInfo")
         {
             // interaction_info is nullable. A null value means that reactions were removed.
             row.ApplyReactionInfo(update.Field("interaction_info").Field("reactions"));
+            row.SetReplyCount((int)update.Field("interaction_info").Field("reply_info").Field("reply_count").Number());
             return;
         }
 

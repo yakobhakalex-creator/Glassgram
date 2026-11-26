@@ -77,7 +77,12 @@ public partial class MainWindow
                 }
                 break;
             case "updateNewMessage":
-                InsertMessage(update.Field("message"));
+                var incoming = update.Field("message");
+                var incomingRow = MessageRow.FromJson(incoming);
+                if (activeHistoryContext is HistoryContext context && incomingRow.ChatId == context.ChatId &&
+                    (context.Kind == HistoryContextKind.MessageThread || incomingRow.ForumTopicId == context.ContextId))
+                    InsertContextMessage(incomingRow);
+                else InsertMessage(incoming);
                 break;
             case "updateMessageSendSucceeded":
             case "updateMessageSendFailed":
@@ -191,6 +196,11 @@ public partial class MainWindow
     private void DeleteCachedMessages(JsonElement update)
     {
         var chatId = update.Field("chat_id").Number();
+        if (activeHistoryContext is HistoryContext context && context.ChatId == chatId && contextualHistories.TryGetValue(context, out var contextual))
+        {
+            foreach (var id in update.Field("message_ids").Items()) contextual.Messages.Remove(id.Number());
+            RenderContextHistory(context, contextual);
+        }
         if (!histories.TryGetValue(chatId, out var history)) return;
         foreach (var id in update.Field("message_ids").Items()) history.Messages.Remove(id.Number());
         if (activeChat?.Id == chatId) RenderHistory(chatId);
@@ -273,9 +283,10 @@ public partial class MainWindow
 
     private async void MessageInputChanged(object sender, TextChangedEventArgs args)
     {
+        if (activeHistoryContext is HistoryContext context) { contextDrafts[context] = MessageInput.Text; }
         if (!suppressDraftSave && activeChat is not null)
         {
-            if (MessageInput.Text.Length == 0) preferences.Drafts.Remove(activeChat.Id); else preferences.Drafts[activeChat.Id] = MessageInput.Text;
+            if (activeHistoryContext is null) { if (MessageInput.Text.Length == 0) preferences.Drafts.Remove(activeChat.Id); else preferences.Drafts[activeChat.Id] = MessageInput.Text; }
         }
         if (telegram is null || activeChat is null || MessageInput.Text.Length == 0 || DateTime.UtcNow - lastTypingSent < TimeSpan.FromSeconds(4)) return;
         lastTypingSent = DateTime.UtcNow;
@@ -283,7 +294,7 @@ public partial class MainWindow
         {
             await telegram.RequestAsync(new
             {
-                @type = "sendChatAction", chat_id = activeChat.Id, topic_id = (object?)null,
+                @type = "sendChatAction", chat_id = ActiveSendChatId, topic_id = ActiveTopicId,
                 business_connection_id = "", action = new Dictionary<string, string> { ["@type"] = "chatActionTyping" }
             }, lifetime.Token);
         }
@@ -302,7 +313,7 @@ public partial class MainWindow
         var id = selectedMessage.Id;
         try
         {
-            var properties = await telegram.RequestAsync(new { @type = "getMessageProperties", chat_id = activeChat.Id, message_id = id }, lifetime.Token);
+            var properties = await telegram.RequestAsync(new { @type = "getMessageProperties", chat_id = selectedMessage.ChatId, message_id = id }, lifetime.Token);
             if (selectedMessage?.Id != id) return;
             ReplyButton.IsEnabled = properties.Field("can_be_replied").Flag();
             EditButton.IsEnabled = properties.Field("can_be_edited").Flag();
@@ -511,7 +522,7 @@ public partial class MainWindow
         if (messageSending || text.Length == 0 || telegram is null || activeChat is null) return;
         messageSending = true;
         SendMessageButton.IsEnabled = false;
-        var chatId = activeChat.Id;
+        var chatId = ActiveSendChatId;
         try
         {
             JsonElement result;
@@ -535,17 +546,18 @@ public partial class MainWindow
                 }
                 result = await telegram.RequestAsync(new
                 {
-                    @type = "sendMessage", chat_id = chatId, topic_id = (object?)null, reply_to = reply,
+                    @type = "sendMessage", chat_id = chatId, topic_id = ActiveTopicId, reply_to = reply,
                     options = (object?)null, reply_markup = (object?)null, input_message_content = TextContent(text)
                 }, lifetime.Token);
             }
-            if (activeChat?.Id == chatId)
+            if (activeChat?.Id == chatId || activeHistoryContext?.ChatId == chatId)
             {
-                InsertMessage(result);
+                var sent = MessageRow.FromJson(result);
+                if (activeHistoryContext is not null) InsertContextMessage(sent); else InsertMessage(result);
                 MessageInput.Text = "";
                 CancelMessageAction(null!, null!);
                 MessengerStatus.Text = "";
-                preferences.Drafts.Remove(chatId);
+                if (activeHistoryContext is HistoryContext context) contextDrafts.Remove(context); else preferences.Drafts.Remove(chatId);
                 SavePreferences();
             }
         }
@@ -560,7 +572,7 @@ public partial class MainWindow
     {
         var selected = SelectedMessages();
         if (selected.Count == 0 || activeChat is null || telegram is null) return;
-        var chatId = activeChat.Id;
+        var chatId = selected[0].ChatId;
         try
         {
             var ids = selected.Select(message => message.Id).ToArray();
@@ -582,6 +594,7 @@ public partial class MainWindow
             };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
             await telegram.RequestAsync(new { @type = "deleteMessages", chat_id = chatId, message_ids = ids, revoke }, lifetime.Token);
+            if (activeHistoryContext is HistoryContext context && contextualHistories.TryGetValue(context, out var contextual)) { foreach (var id in ids) contextual.Messages.Remove(id); RenderContextHistory(context, contextual); }
             if (histories.TryGetValue(chatId, out var history)) foreach (var id in ids) history.Messages.Remove(id);
             if (histories.TryGetValue(chatId, out history)) _ = SaveHistoryCacheAsync(chatId, history);
             if (activeChat?.Id == chatId) RenderHistory(chatId);

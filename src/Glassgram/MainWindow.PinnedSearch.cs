@@ -214,18 +214,22 @@ public partial class MainWindow
     private async Task LoadChatSearchPageAsync(int version, bool firstPage, CancellationToken token)
     {
         if (telegram is null || activeChat is null) return;
-        var chatId = activeChat.Id;
+        var chatId = ActiveSendChatId;
         var query = MessageSearch.Text.Trim();
         var sender = SelectedChatSearchSender();
         var filter = SelectedChatSearchFilter();
         var from = firstPage ? 0 : chatSearchNextFromMessageId;
         try
         {
-            var page = await ChatSearchService.SearchAsync(telegram, chatId, query, from, sender, filter, token);
-            if (version != chatSearchVersion || activeChat?.Id != chatId || query != MessageSearch.Text.Trim()) return;
+            var contextAtRequest = activeHistoryContext;
+            var page = await ChatSearchService.SearchAsync(telegram, chatId, query, from, sender, filter, token, ActiveTopicId);
+            if (version != chatSearchVersion || activeHistoryContext != contextAtRequest || query != MessageSearch.Text.Trim()) return;
             if (firstPage) { chatSearchResults.Clear(); chatSearchIndex = -1; }
             var known = chatSearchResults.Select(message => message.Id).ToHashSet();
-            if (!histories.TryGetValue(chatId, out var history)) return;
+            ChatHistory? history = null;
+            if (contextAtRequest is HistoryContext context) contextualHistories.TryGetValue(context, out history);
+            else histories.TryGetValue(chatId, out history);
+            if (history is null) return;
             foreach (var message in page.Messages)
             {
                 var row = MessageRow.FromJson(message);

@@ -273,6 +273,8 @@ public partial class MainWindow
             if (version != chatOpenVersion) return;
             await PreparePinnedMessagesAsync(chat.Id, version);
             if (version != chatOpenVersion) return;
+            await PrepareForumAsync(chat, version);
+            if (version != chatOpenVersion) return;
             if (!histories.TryGetValue(chatId, out var history))
             {
                 history = new ChatHistory();
@@ -551,7 +553,15 @@ public partial class MainWindow
 
     private async void MessageScrollChanged(object? sender, ScrollViewerViewChangedEventArgs args)
     {
-        if (historyRestores > 0 || activeChat is null || messageScroller is null || !histories.TryGetValue(activeChat.Id, out var history)) return;
+        if (historyRestores > 0 || activeChat is null || messageScroller is null) return;
+        if (activeHistoryContext is HistoryContext context)
+        {
+            contextScrollPositions[context] = messageScroller.VerticalOffset;
+            JumpToLatestButton.Visibility = messageScroller.VerticalOffset < messageScroller.ScrollableHeight - 240 ? Visibility.Visible : Visibility.Collapsed;
+            if (messageScroller.VerticalOffset < 80) await LoadOlderContextHistoryAsync();
+            return;
+        }
+        if (!histories.TryGetValue(activeChat.Id, out var history)) return;
         scrollPositions[activeChat.Id] = messageScroller.VerticalOffset;
         JumpToLatestButton.Visibility = messageScroller.VerticalOffset < messageScroller.ScrollableHeight - 240 ? Visibility.Visible : Visibility.Collapsed;
         if (messageScroller.VerticalOffset < 80 && history.HasMore && !history.Loading)

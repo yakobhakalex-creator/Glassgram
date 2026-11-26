@@ -17,6 +17,7 @@ public partial class MainWindow
     private MemoryStream? voicePcm;
     private DateTime voiceStarted;
     private long voiceChatId;
+    private object? voiceTopicId;
     private bool voiceRecording;
     private readonly DispatcherTimer voiceRecordTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly Dictionary<ContentControl, VoicePlayback> voiceControls = [];
@@ -33,7 +34,8 @@ public partial class MainWindow
             voiceCapture.DataAvailable += (_, data) => voicePcm?.Write(data.Buffer, 0, data.BytesRecorded);
             voiceCapture.StartRecording();
             voiceRecording = true;
-            voiceChatId = activeChat.Id;
+            voiceChatId = ActiveSendChatId;
+            voiceTopicId = ActiveTopicId;
             voiceStarted = DateTime.UtcNow;
             VoiceRecordingPanel.Visibility = Visibility.Visible;
             MessengerStatus.Visibility = Visibility.Collapsed;
@@ -82,8 +84,9 @@ public partial class MainWindow
             var opusPath = Path.Combine(voiceFolder, $"voice-{Guid.NewGuid():N}.ogg");
             var voiceFile = VoiceNotePipeline.Encode(opusPath, samples);
             var waveform = BuildTelegramWaveform(samples);
-            var result = await telegram!.RequestAsync(VoiceNotePipeline.BuildSendRequest(chatId, voiceFile, waveform), lifetime.Token);
-            InsertMessage(result);
+            var result = await telegram!.RequestAsync(VoiceNotePipeline.BuildSendRequest(chatId, voiceFile, waveform, voiceTopicId), lifetime.Token);
+            var sent = MessageRow.FromJson(result);
+            if (activeHistoryContext is not null) InsertContextMessage(sent); else InsertMessage(result);
             MessengerStatus.Text = "";
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException or InvalidOperationException or IOException or UnauthorizedAccessException)

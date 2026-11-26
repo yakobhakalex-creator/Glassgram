@@ -164,6 +164,24 @@ var issuedGeneration = chatSearchGeneration;
 chatSearchGeneration++;
 if (issuedGeneration == chatSearchGeneration) throw new Exception("Per-chat stale response guard regression");
 
+// Forum topics and channel discussion threads use different, isolated cursors.
+var forumTopicsRequest = Parse(new { @type = "getForumTopics", chat_id = 42L, query = "support", offset_date = 1700000000, offset_message_id = 900L, offset_forum_topic_id = 17, limit = 50 });
+Equal("getForumTopics", forumTopicsRequest, "$forumTopics");
+if (forumTopicsRequest.GetProperty("offset_forum_topic_id").GetInt32() != 17) throw new Exception("Forum topic pagination cursor regression");
+var topicHistory = Parse(new { @type = "getForumTopicHistory", chat_id = 42L, forum_topic_id = 17, from_message_id = 800L, offset = 0, limit = 100 });
+Equal("getForumTopicHistory", topicHistory, "$topicHistory");
+var threadHistory = Parse(new { @type = "getMessageThreadHistory", chat_id = 100L, message_id = 700L, from_message_id = 600L, offset = 0, limit = 100 });
+Equal("getMessageThreadHistory", threadHistory, "$threadHistory");
+var topicSend = Parse(VoiceNotePipeline.BuildSendRequest(42, new VoiceNoteFile("C:\\Temp\\voice.ogg", 2, 96000), "AQID", new Dictionary<string, object?> { ["@type"] = "messageTopicForum", ["forum_topic_id"] = 17 }));
+Equal("messageTopicForum", topicSend.GetProperty("topic_id"), "$topicSend.topic_id");
+var chatContext = HistoryContext.Chat(42);
+var topicContext = HistoryContext.ForumTopic(42, 17);
+var otherTopicContext = HistoryContext.ForumTopic(42, 18);
+var threadContext = HistoryContext.MessageThread(99, 700, 42, 500);
+if (chatContext == topicContext || topicContext == otherTopicContext || topicContext == threadContext) throw new Exception("History contexts aren't isolated");
+var routing = new Dictionary<HistoryContext, long> { [topicContext] = 1, [otherTopicContext] = 2, [threadContext] = 3 };
+if (routing.Count != 3 || routing[threadContext] != 3) throw new Exception("History context routing regression");
+
 // Chat folders: root and nested TDLib types.
 var folderObject = new Dictionary<string, object?>
 {

@@ -51,12 +51,12 @@ internal static class VoiceNotePipeline
         return new VoiceNoteFile(path, (int)Math.Ceiling(pcm.Length / (double)SampleRate), decodedSamples);
     }
 
-    public static object BuildSendRequest(long chatId, VoiceNoteFile file, string waveform) => new
+    public static object BuildSendRequest(long chatId, VoiceNoteFile file, string waveform, object? topicId = null, object? replyTo = null) => new
     {
         @type = "sendMessage",
         chat_id = chatId,
-        topic_id = (object?)null,
-        reply_to = (object?)null,
+        topic_id = topicId,
+        reply_to = replyTo,
         options = (object?)null,
         reply_markup = (object?)null,
         input_message_content = new
