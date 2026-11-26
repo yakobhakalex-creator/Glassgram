@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <GlassgramVersion>0.6.4</GlassgramVersion>
+    <Version>$(GlassgramVersion)</Version>
+  </PropertyGroup>
+</Project>

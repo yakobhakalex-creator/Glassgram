@@ -34,6 +34,10 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        var assemblyVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        VersionText.Text = assemblyVersion is null
+            ? "Glassgram · C#, WinUI 3 и TDLib"
+            : $"Glassgram {assemblyVersion.Major}.{assemblyVersion.Minor}.{assemblyVersion.Build} · C#, WinUI 3 и TDLib";
         SystemBackdrop = new DesktopAcrylicBackdrop();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);

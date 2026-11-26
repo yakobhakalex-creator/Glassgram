@@ -338,7 +338,7 @@
           <Button Content="Сохранить" Click="SaveSettings"/>
           <TextBlock x:Name="SettingsStatus" TextWrapping="Wrap" Foreground="#B6C8D9"/>
           <Button x:Name="LogoutButton" Content="Выйти из Telegram" Click="LogoutTelegram" Visibility="Collapsed" HorizontalAlignment="Left"/>
-          <TextBlock Text="Glassgram 0.6.4 · C#, WinUI 3 и TDLib" Foreground="#B6C8D9"/>
+          <TextBlock x:Name="VersionText" Foreground="#B6C8D9"/>
         </StackPanel></controls:GlassPanel></ScrollViewer>
       </Grid>
     </NavigationView>
