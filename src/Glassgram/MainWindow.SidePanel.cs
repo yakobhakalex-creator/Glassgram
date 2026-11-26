@@ -39,7 +39,7 @@ public partial class MainWindow
         panelStickers.Clear();
         FutureSidePanel.Visibility = Visibility.Collapsed;
         FutureSidePanelColumn.Width = new GridLength(0);
-        ProfilePanel.Visibility = StickersPanel.Visibility = Visibility.Collapsed;
+        ProfilePanel.Visibility = StickersPanel.Visibility = PinnedMessagesPanel.Visibility = Visibility.Collapsed;
     }
 
     private async void OpenProfilePanel(object sender, RoutedEventArgs args)
@@ -49,6 +49,7 @@ public partial class MainWindow
         stickerLoadVersion++;
         panelStickers.Clear();
         ProfilePanel.Visibility = Visibility.Collapsed;
+        PinnedMessagesPanel.Visibility = Visibility.Collapsed;
         ProfileSharedCategory.SelectedIndex = 0;
         sharedFilter = "searchMessagesFilterPhotoAndVideo";
         ShowSidePanel("Профиль");

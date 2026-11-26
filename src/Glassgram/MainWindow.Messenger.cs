@@ -86,6 +86,8 @@ public partial class MainWindow
         pendingChatUpdates.Clear();
         visibleChats.Clear();
         visibleMessages.Clear();
+        pinnedMessages.Clear();
+        PinnedMessageBar.Visibility = Visibility.Collapsed;
         histories.Clear();
         scrollPositions.Clear();
         historyDepths.Clear();
@@ -268,6 +270,8 @@ public partial class MainWindow
             CancelMessageAction(null!, null!);
             UpdateActiveStatus();
             await telegram.RequestAsync(new { @type = "openChat", chat_id = chat.Id }, lifetime.Token);
+            if (version != chatOpenVersion) return;
+            await PreparePinnedMessagesAsync(chat.Id, version);
             if (version != chatOpenVersion) return;
             if (!histories.TryGetValue(chatId, out var history))
             {
@@ -597,8 +601,9 @@ public partial class MainWindow
     private void ToggleMessageSearch(object sender, RoutedEventArgs args)
     {
         MessageSearch.Visibility = MessageSearch.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+        ChatSearchTools.Visibility = MessageSearch.Visibility;
         if (MessageSearch.Visibility == Visibility.Visible) MessageSearch.Focus(FocusState.Programmatic);
-        else if (MessageSearch.Text.Length > 0) MessageSearch.Text = "";
+        else { MessageSearch.Text = ""; ResetChatSearch(true); }
     }
 
     private void UpdateComposerAvailability()

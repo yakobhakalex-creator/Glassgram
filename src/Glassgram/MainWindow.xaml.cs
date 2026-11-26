@@ -499,4 +499,5 @@ public sealed class Preferences
     public bool ComplexEffects { get; set; } = true;
     public int InterfaceScale { get; set; } = 100;
     public int ActiveChatFolderId { get; set; }
+    public HashSet<long> HiddenPinnedBars { get; set; } = [];
 }

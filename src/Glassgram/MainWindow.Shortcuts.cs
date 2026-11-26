@@ -64,13 +64,12 @@ public partial class MainWindow
     private void CancelCurrentAction()
     {
         if (FutureSidePanel.Visibility == Visibility.Visible) { CloseSidePanel(this, new RoutedEventArgs()); return; }
-        if (MessageSearch.Visibility == Visibility.Visible) { MessageSearch.Text = ""; MessageSearch.Visibility = Visibility.Collapsed; if (activeChat is not null) RenderHistory(activeChat.Id); return; }
+        if (MessageSearch.Visibility == Visibility.Visible) { MessageSearch.Text = ""; MessageSearch.Visibility = ChatSearchTools.Visibility = Visibility.Collapsed; ResetChatSearch(true); return; }
         if (ComposeContext.Visibility == Visibility.Visible) { CancelMessageAction(this, new RoutedEventArgs()); return; }
         MessageList.SelectedItems.Clear();
     }
 
-    private void ShowMessageSearch() { if (activeChat is null) return; MessageSearch.Visibility = Visibility.Visible; MessageSearch.Focus(FocusState.Programmatic); MessageSearch.SelectAll(); }
-    private void SearchMessages(object sender, TextChangedEventArgs e) { if (activeChat is not null) RenderHistory(activeChat.Id); }
+    private void ShowMessageSearch() { if (activeChat is null) return; MessageSearch.Visibility = ChatSearchTools.Visibility = Visibility.Visible; MessageSearch.Focus(FocusState.Programmatic); MessageSearch.SelectAll(); }
     private void SwitchChat(int offset) { if (visibleChats.Count == 0) return; var index = Math.Max(0, ChatList.SelectedIndex); ChatList.SelectedIndex = (index + offset + visibleChats.Count) % visibleChats.Count; ChatList.ScrollIntoView(ChatList.SelectedItem); }
     private void SaveCurrentDraft() { if (activeChat is null) return; if (MessageInput.Text.Length == 0) preferences.Drafts.Remove(activeChat.Id); else preferences.Drafts[activeChat.Id] = MessageInput.Text; SavePreferences(); }
 

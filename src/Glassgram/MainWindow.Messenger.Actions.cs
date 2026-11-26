@@ -86,6 +86,7 @@ public partial class MainWindow
             case "updateMessageContent":
             case "updateMessageEdited":
                 _ = RefreshMessageAsync(chatId, update.Field("message_id").Number());
+                RefreshPinnedMessages(chatId);
                 break;
             case "updateMessageInteractionInfo":
             case "updateMessageReactions":
@@ -94,9 +95,11 @@ public partial class MainWindow
             case "updateMessageIsPinned":
                 if (histories.TryGetValue(chatId, out var pinnedHistory) && pinnedHistory.Messages.TryGetValue(update.Field("message_id").Number(), out var pinnedRow))
                     pinnedRow.SetPinned(update.Field("is_pinned").Flag());
+                RefreshPinnedMessages(chatId);
                 break;
             case "updateDeleteMessages":
                 DeleteCachedMessages(update);
+                RefreshPinnedMessages(chatId);
                 break;
             case "updateFile":
                 UpdateAvatar(update.Field("file"));
@@ -393,9 +396,19 @@ public partial class MainWindow
         if ((sender as FrameworkElement)?.DataContext is not MessageRow row || telegram is null) return;
         try
         {
-            await telegram.RequestAsync(row.IsPinned
-                ? new { @type = "unpinChatMessage", chat_id = row.ChatId, message_id = row.Id }
-                : new { @type = "pinChatMessage", chat_id = row.ChatId, message_id = row.Id, disable_notification = true, only_for_self = false }, lifetime.Token);
+            if (row.IsPinned)
+                await telegram.RequestAsync(new { @type = "unpinChatMessage", chat_id = row.ChatId, message_id = row.Id }, lifetime.Token);
+            else
+            {
+                var notify = new CheckBox { Content = "Уведомить участников", IsChecked = true };
+                var dialog = new ContentDialog
+                {
+                    XamlRoot = Root.XamlRoot, Title = "Закрепить сообщение?", Content = notify,
+                    PrimaryButtonText = "Закрепить", CloseButtonText = "Отмена", DefaultButton = ContentDialogButton.Primary
+                };
+                if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+                await telegram.RequestAsync(new { @type = "pinChatMessage", chat_id = row.ChatId, message_id = row.Id, disable_notification = notify.IsChecked != true, only_for_self = false }, lifetime.Token);
+            }
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException) { MessengerStatus.Text = "Не удалось изменить закрепление. " + ex.Message; }
     }
