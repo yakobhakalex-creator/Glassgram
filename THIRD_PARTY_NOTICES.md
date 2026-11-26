@@ -34,6 +34,7 @@
 | Компонент Unigram | Upstream commit и файл | Файл Glassgram | Изменения |
 | --- | --- | --- | --- |
 | Каталог эмодзи | `Telegram/Common/Emoticon.cs` | `src/Glassgram/Telegram/UnigramEmojiCatalog.cs` | Изолированы данные категорий, добавлена русская локализация. |
+| Папки чатов | модели `ChatFolder`, `ChatFolderInfo`, обработчики `UpdateChatFolders` и списки `ChatListFolder` | `src/Glassgram/Telegram/ChatFolderModels.cs`, `src/Glassgram/MainWindow.ChatFolders.cs` | Адаптированы синхронизация серверных папок, порядок, счётчики и переключение списков; UI реализован заново для Glassgram. |
 | Панель стикеров | `Telegram/ViewModels/Drawers/StickerDrawerViewModel.cs` | `src/Glassgram/MainWindow.SidePanel.cs` | Адаптированы источники TDLib: недавние, избранные, установленные наборы и поиск. |
 | Общие материалы | `Telegram/Collections/MediaCollection.cs` | `src/Glassgram/MainWindow.SidePanel.cs` | Адаптирована постраничная загрузка `searchChatMessages`. |
 | Профили | `Telegram/ViewModels/ProfileViewModel.cs` | `src/Glassgram/MainWindow.SidePanel.cs` | Адаптированы запросы пользователей, групп и каналов. |

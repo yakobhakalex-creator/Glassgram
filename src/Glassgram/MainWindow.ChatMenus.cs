@@ -22,6 +22,18 @@ public partial class MainWindow
         AddChatMenuItem(menu, chat.UnreadCount > 0 || chat.IsMarkedUnread ? "Отметить прочитанным" : "Отметить непрочитанным", chat, ToggleChatUnread);
         AddChatMenuItem(menu, chat.IsMuted ? "Включить уведомления" : "Отключить уведомления", chat, ToggleChatMuted);
         AddChatMenuItem(menu, chat.IsArchive ? "Вернуть из архива" : "Архивировать", chat, ToggleChatArchived);
+        if (chatFolders.Count > 1)
+        {
+            var folders = new MenuFlyoutSubItem { Text = "Папки" };
+            foreach (var folder in chatFolders.Where(folder => !folder.IsAll))
+            {
+                var included = ChatFolderList.Contains(chat, folder.Id);
+                var item = new MenuFlyoutItem { Text = included ? $"Удалить из «{folder.Title}»" : $"Добавить в «{folder.Title}»", DataContext = (chat, folder, !included) };
+                item.Click += ChangeChatFolder;
+                folders.Items.Add(item);
+            }
+            menu.Items.Add(folders);
+        }
         menu.Items.Add(new MenuFlyoutSeparator());
         AddChatMenuItem(menu, "Открыть профиль", chat, OpenChatProfile);
         if (!chat.IsSaved) AddChatMenuItem(menu, "Удалить чат", chat, DeleteChat, true);
@@ -69,6 +81,12 @@ public partial class MainWindow
     {
         if (!TryGetChat(sender, out var chat)) return;
         await RunChatAction(chat, new { @type = "addChatToList", chat_id = chat.Id, chat_list = ChatListObject(!chat.IsArchive) }, "Не удалось изменить архив.");
+    }
+
+    private async void ChangeChatFolder(object sender, RoutedEventArgs args)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ValueTuple<ChatRow, ChatFolderRow, bool> data)
+            await SetChatInFolderAsync(data.Item1, data.Item2, data.Item3);
     }
 
     private async void OpenChatProfile(object sender, RoutedEventArgs args)

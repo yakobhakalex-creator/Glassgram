@@ -19,6 +19,16 @@ public partial class MainWindow
     {
         var kind = update.Field("@type").Text();
         var chatId = update.Field("chat_id").Number();
+        if (kind == "updateChatFolders")
+        {
+            _ = ApplyChatFoldersAsync(update);
+            return;
+        }
+        if (kind is "updateUnreadChatCount" or "updateUnreadMessageCount")
+        {
+            ApplyFolderUnread(update);
+            return;
+        }
         if (!messengerStarted)
         {
             if (kind is "updateNewChat" or "updateChatPosition" or "updateChatLastMessage" or "updateChatDraftMessage")

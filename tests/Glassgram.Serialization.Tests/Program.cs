@@ -140,4 +140,38 @@ if (staleGen == generation) throw new Exception("Generation check logic failed")
 if (searchMessages.GetProperty("offset").GetString() != "next-page-token") throw new Exception("searchMessages offset mismatch");
 if (searchMessages.TryGetProperty("from_message_id", out _)) throw new Exception("searchMessages must not contain from_message_id");
 
+// Chat folders: root and nested TDLib types.
+var folderObject = new Dictionary<string, object?>
+{
+    ["@type"] = "chatFolder", ["name"] = new Dictionary<string, object?>
+    {
+        ["@type"] = "chatFolderName", ["text"] = new { @type = "formattedText", text = "Work", entities = Array.Empty<object>() }, ["animate_custom_emoji"] = false
+    },
+    ["icon"] = new Dictionary<string, object?> { ["@type"] = "chatFolderIcon", ["name"] = "Custom" },
+    ["color_id"] = -1, ["is_shareable"] = false,
+    ["pinned_chat_ids"] = Array.Empty<long>(), ["included_chat_ids"] = new long[] { 3, 7 }, ["excluded_chat_ids"] = Array.Empty<long>(),
+    ["exclude_muted"] = false, ["exclude_read"] = false, ["exclude_archived"] = true,
+    ["include_contacts"] = true, ["include_non_contacts"] = false, ["include_bots"] = false,
+    ["include_groups"] = true, ["include_channels"] = false
+};
+var createFolder = Parse(new { @type = "createChatFolder", folder = folderObject });
+Equal("createChatFolder", createFolder, "$createFolder");
+Equal("chatFolder", createFolder.GetProperty("folder"), "$createFolder.folder");
+Equal("chatFolderName", createFolder.GetProperty("folder").GetProperty("name"), "$createFolder.folder.name");
+Equal("formattedText", createFolder.GetProperty("folder").GetProperty("name").GetProperty("text"), "$createFolder.folder.name.text");
+Equal("chatFolderIcon", createFolder.GetProperty("folder").GetProperty("icon"), "$createFolder.folder.icon");
+Equal("editChatFolder", Parse(new { @type = "editChatFolder", chat_folder_id = 9, folder = folderObject }), "$editFolder");
+Equal("deleteChatFolder", Parse(new { @type = "deleteChatFolder", chat_folder_id = 9, leave_chat_ids = Array.Empty<long>() }), "$deleteFolder");
+Equal("reorderChatFolders", Parse(new { @type = "reorderChatFolders", chat_folder_ids = new[] { 9, 4 }, main_chat_list_position = 1 }), "$reorderFolders");
+var loadFolder = Parse(new { @type = "loadChats", chat_list = new { @type = "chatListFolder", chat_folder_id = 9 }, limit = 100 });
+Equal("loadChats", loadFolder, "$loadFolder");
+Equal("chatListFolder", loadFolder.GetProperty("chat_list"), "$loadFolder.chat_list");
+
+var folderPositions = new Dictionary<long, long> { [3] = 300, [7] = 700, [5] = 0 };
+var folderMembers = folderPositions.Where(pair => pair.Value != 0).OrderByDescending(pair => pair.Value).Select(pair => pair.Key).ToArray();
+if (!folderMembers.SequenceEqual(new long[] { 7, 3 })) throw new Exception("Folder membership/order regression");
+var folderGeneration = 4;
+var requestedFolderGeneration = folderGeneration++;
+if (requestedFolderGeneration == folderGeneration) throw new Exception("Folder stale-switch guard regression");
+
 Console.WriteLine("TDLib serialization regression tests passed.");

@@ -67,6 +67,7 @@ public partial class MainWindow
         chatListsLoading = true;
         ChatList.ItemsSource = visibleChats;
         MessageList.ItemsSource = visibleMessages;
+        InitializeChatFolders();
         LogChatOrder($"replay queued_updates={pendingChatUpdates.Count}");
         foreach (var update in pendingChatUpdates) HandleMessengerUpdate(update);
         pendingChatUpdates.Clear();
@@ -182,16 +183,17 @@ public partial class MainWindow
         if (searchActive) return; // Don't refresh normal list during search
         var selected = activeChat?.Id;
         var query = ChatSearch.Text.Trim();
+        var listKey = showingArchive ? "chatListArchive" : ChatFolderList.Key(activeFolderId);
         var rows = knownChats.Values
-            .Where(c => showingArchive ? c.IsArchive : c.IsMain)
+            .Where(c => c.GetOrder(listKey) != 0)
             .Where(c => query.Length == 0 || c.Title.Contains(query, StringComparison.CurrentCultureIgnoreCase))
-            .OrderByDescending(c => c.GetOrder(showingArchive ? "chatListArchive" : "chatListMain"))
+            .OrderByDescending(c => c.GetOrder(listKey))
             .ThenByDescending(c => c.Id)
             .ToArray();
         if (rows.Length == visibleChats.Count && rows.SequenceEqual(visibleChats)) return;
         visibleChats.Clear();
         foreach (var row in rows) visibleChats.Add(row);
-        LogChatOrder($"visible list={(showingArchive ? "chatListArchive" : "chatListMain")} count={rows.Length}");
+        LogChatOrder($"visible list={listKey} count={rows.Length}");
         if (selected is long id && knownChats.TryGetValue(id, out var current) && visibleChats.Contains(current))
             ChatList.SelectedItem = current;
     }

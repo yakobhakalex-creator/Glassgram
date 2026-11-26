@@ -111,7 +111,7 @@ public partial class MainWindow : Window
 
     private void OpenAi(object sender, RoutedEventArgs args) => Navigation.SelectedItem = Navigation.MenuItems.OfType<NavigationViewItem>().First(item => item.Tag?.ToString() == "ai");
 
-    private void ShowMainChats(object sender, RoutedEventArgs args) { showingArchive = false; RefreshChatList(); }
+    private void ShowMainChats(object sender, RoutedEventArgs args) { showingArchive = false; activeFolderId = 0; preferences.ActiveChatFolderId = 0; SavePreferences(); if (chatFolders.Count > 0) FolderList.SelectedItem = chatFolders[0]; RefreshChatList(); }
     private void ShowArchiveChats(object sender, RoutedEventArgs args) { showingArchive = true; RefreshChatList(); }
 
     private Uri ServerUri()
@@ -498,4 +498,5 @@ public sealed class Preferences
     public bool Animations { get; set; } = true;
     public bool ComplexEffects { get; set; } = true;
     public int InterfaceScale { get; set; } = 100;
+    public int ActiveChatFolderId { get; set; }
 }

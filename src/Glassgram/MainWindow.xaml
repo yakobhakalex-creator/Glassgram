@@ -82,8 +82,20 @@
         </Grid>
         <Grid x:Name="ChatsPage" ColumnSpacing="0">
           <Grid.ColumnDefinitions><ColumnDefinition x:Name="ChatColumn" Width="340" MinWidth="250"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-          <controls:GlassPanel x:Name="ChatListPanel" CornerRadius="28" BorderBrush="Transparent" BorderThickness="0" Padding="10" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
-            <Grid RowSpacing="8"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+          <controls:GlassPanel x:Name="ChatListPanel" CornerRadius="28" BorderBrush="Transparent" BorderThickness="0" Padding="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border x:Name="FolderRail" Visibility="Collapsed" Width="62" Margin="5" Padding="3,8" CornerRadius="22" Background="#24101924">
+              <Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <ListView x:Name="FolderList" SelectionMode="Single" SelectionChanged="SelectFolder" Background="Transparent" ScrollViewer.VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Stretch">
+                  <ListView.ItemTemplate><DataTemplate><Grid Width="48" MinHeight="54" ToolTipService.ToolTip="{Binding Title}">
+                    <FontIcon Glyph="{Binding Icon}" FontSize="21" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Border Visibility="{Binding UnreadVisibility}" Background="#5CA9D4" CornerRadius="9" Padding="4,0" HorizontalAlignment="Right" VerticalAlignment="Top"><TextBlock Text="{Binding UnreadText}" FontSize="9" Foreground="White"/></Border>
+                  </Grid></DataTemplate></ListView.ItemTemplate>
+                </ListView>
+                <Button x:Name="FolderManagementButton" Grid.Row="1" Content="&#xE713;" FontFamily="Segoe Fluent Icons" Width="44" Height="44" Padding="0" Click="OpenFolderSettings" ToolTipService.ToolTip="Управление папками"/>
+              </Grid>
+            </Border>
+            <Grid Grid.Column="1" Margin="10" RowSpacing="8"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
               <TextBlock Text="Чаты" FontSize="25" FontWeight="SemiBold" Margin="10,5,8,0"/>
               <TextBox x:Name="ChatSearch" Grid.Row="1" PlaceholderText="Поиск в Glassgram" TextChanged="SearchChats" GotFocus="SearchFocus"/>
               <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="7" Margin="2,0"><Button Content="Все чаты" Click="ShowMainChats"/><Button Content="Архив" Click="ShowArchiveChats"/></StackPanel>
@@ -155,7 +167,7 @@
                   </Grid>
                 </DataTemplate></ListView.ItemTemplate>
               </ListView>
-            </Grid>
+            </Grid></Grid>
           </controls:GlassPanel>
           <Grid Grid.Column="1" Background="Transparent" PointerPressed="ResizeChatPressed" PointerMoved="ResizeChatMoved" PointerReleased="ResizeChatReleased" PointerCaptureLost="ResizeChatCaptureLost" ToolTipService.ToolTip="Изменить ширину списка чатов"><Border Width="1" Background="#28FFFFFF" HorizontalAlignment="Center" Margin="0,22"/></Grid>
           <controls:GlassPanel x:Name="MessagesPanel" Grid.Column="2" CornerRadius="28" BorderBrush="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
@@ -336,6 +348,19 @@
           <StackPanel Spacing="4"><TextBlock Text="Насыщенность стекла"/><Slider x:Name="SaturationChoice" Minimum="0" Maximum="100" StepFrequency="5" ValueChanged="GlassSettingChanged"/></StackPanel>
           <ToggleSwitch x:Name="AnimationsChoice" Header="Анимации интерфейса" Toggled="GlassSettingChanged"/>
           <ToggleSwitch x:Name="ComplexEffectsChoice" Header="Сложные эффекты и отражения" Toggled="GlassSettingChanged"/>
+          <StackPanel x:Name="FolderSettingsPanel" Spacing="10">
+            <TextBlock Text="Папки чатов" FontSize="22" FontWeight="SemiBold" Margin="0,10,0,0"/>
+            <TextBlock Text="Папки синхронизируются с Telegram. Удаление папки не удаляет переписки." Opacity="0.7" TextWrapping="Wrap"/>
+            <TextBlock x:Name="FolderSettingsEmpty" Text="Пользовательских папок пока нет." Opacity="0.65"/>
+            <ListView x:Name="FolderSettingsList" SelectionMode="Single" MaxHeight="280">
+              <ListView.ItemTemplate><DataTemplate><Grid Padding="8" ColumnSpacing="10"><Grid.ColumnDefinitions><ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <FontIcon Glyph="{Binding Icon}" FontSize="19"/><TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" FontWeight="SemiBold"/><TextBlock Grid.Column="2" Text="{Binding UnreadText}" Visibility="{Binding UnreadVisibility}" Opacity="0.7" VerticalAlignment="Center"/>
+              </Grid></DataTemplate></ListView.ItemTemplate>
+            </ListView>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Создать" Click="CreateFolder"/><Button Content="Изменить" Click="EditFolder"/><Button Content="↑" Click="MoveFolderUp"/><Button Content="↓" Click="MoveFolderDown"/><Button Content="Удалить" Click="DeleteFolder"/>
+            </StackPanel>
+          </StackPanel>
           <Button Content="Сохранить" Click="SaveSettings"/>
           <TextBlock x:Name="SettingsStatus" TextWrapping="Wrap" Foreground="#B6C8D9"/>
           <Button x:Name="LogoutButton" Content="Выйти из Telegram" Click="LogoutTelegram" Visibility="Collapsed" HorizontalAlignment="Left"/>
