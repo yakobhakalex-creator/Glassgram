@@ -68,7 +68,7 @@ public partial class MainWindow : Window
         }
         wallpaperTimer.Tick += WallpaperTimerTick;
         wallpaperTimer.Start();
-        Closed += (_, _) => { wallpaperTimer.Stop(); SaveCurrentDraft(); lifetime.Cancel(); http.Dispose(); };
+        Closed += async (_, _) => { wallpaperTimer.Stop(); if (voiceRecording) await FinishVoiceRecordingAsync(false); activeVoice?.Dispose(); SaveCurrentDraft(); lifetime.Cancel(); http.Dispose(); };
         InitializeMedia();
         InitializeTelegram();
     }

@@ -161,7 +161,7 @@ internal sealed class ChatRow(long id) : INotifyPropertyChanged
     }
 }
 
-internal sealed class MessageRow : INotifyPropertyChanged
+internal sealed partial class MessageRow : INotifyPropertyChanged
 {
     private static readonly Regex LinkPattern = new(@"https?://[^\s<>()]+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     public long Id { get; init; }
@@ -183,6 +183,8 @@ internal sealed class MessageRow : INotifyPropertyChanged
     public string PreviewPath { get; private set; } = "";
     public string FileName { get; private set; } = "";
     public string MimeType { get; private set; } = "";
+    public int VoiceDuration { get; private set; }
+    public string VoiceWaveform { get; private set; } = "";
     public long FileSize { get; private set; }
     public double TransferProgress { get; private set; }
     public string TransferText { get; private set; } = "";
@@ -195,7 +197,7 @@ internal sealed class MessageRow : INotifyPropertyChanged
     public bool GroupedWithPrevious { get; set; }
     public Visibility AvatarVisibility => !Outgoing && !GroupedWithPrevious ? Visibility.Visible : Visibility.Collapsed;
     public Visibility AuthorVisibility => Author.Length > 0 && !GroupedWithPrevious ? Visibility.Visible : Visibility.Collapsed;
-    public string DisplayText => MediaKind == "sticker" ? "" : Text;
+    public string DisplayText => MediaKind is "sticker" or "voice" ? "" : Text;
     public double BubbleMaxWidth => MediaKind == "sticker" ? 280 : 10000;
     public Thickness RowMargin => new(Outgoing ? 18 : 0, GroupedWithPrevious ? 1 : 5, Outgoing ? 0 : 12, 0);
     public CornerRadius BubbleCornerRadius => Outgoing
@@ -209,6 +211,7 @@ internal sealed class MessageRow : INotifyPropertyChanged
     public Visibility InlineVideoVisibility => MediaKind == "sticker" && StickerFormat == "stickerFormatWebm" || MediaKind == "animation" && MimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed;
     public Visibility TgsVisibility => MediaKind == "sticker" && StickerFormat == "stickerFormatTgs" ? Visibility.Visible : Visibility.Collapsed;
     public Visibility DocumentVisibility => MediaKind == "document" ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility VoiceVisibility => MediaKind == "voice" ? Visibility.Visible : Visibility.Collapsed;
     public Visibility TransferVisibility => TransferText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     public string FileSizeText => FileSize <= 0 ? "" : FileSize < 1024 * 1024 ? $"{FileSize / 1024d:0.#} КБ" : $"{FileSize / 1024d / 1024d:0.#} МБ";
     public Visibility DateVisibility => IsDate ? Visibility.Visible : Visibility.Collapsed;
@@ -244,6 +247,8 @@ internal sealed class MessageRow : INotifyPropertyChanged
             RawJson = message.GetRawText()
         };
         row.ReadMedia(message.Field("content"));
+        row.ApplyReactionInfo(message.Field("interaction_info").Field("reactions"));
+        row.SetPinned(message.Field("is_pinned").Flag());
         return row;
     }
 
@@ -297,6 +302,15 @@ internal sealed class MessageRow : INotifyPropertyChanged
                 preview = document.Field("thumbnail").Field("file");
                 FileName = document.Field("file_name").Text();
                 MimeType = document.Field("mime_type").Text();
+                break;
+            case "messageVoiceNote":
+                MediaKind = "voice";
+                var voice = content.Field("voice_note");
+                primary = voice.Field("voice");
+                MimeType = voice.Field("mime_type").Text();
+                VoiceDuration = (int)voice.Field("duration").Number();
+                VoiceWaveform = voice.Field("waveform").Text();
+                FileName = "voice.ogg";
                 break;
         }
         ApplyInitialFile(primary, true);
@@ -373,7 +387,7 @@ internal sealed class MessageRow : INotifyPropertyChanged
 
     private void RaiseMedia()
     {
-        foreach (var name in new[] { nameof(MediaPreview), nameof(MediaPath), nameof(PreviewPath), nameof(TransferProgress), nameof(TransferText), nameof(TransferVisibility), nameof(FileSizeText), nameof(IsDownloadCompleted), nameof(IsDownloadingActive), nameof(CanBeDownloaded), nameof(DisplayText), nameof(BubbleMaxWidth) })
+        foreach (var name in new[] { nameof(MediaPreview), nameof(MediaPath), nameof(PreviewPath), nameof(TransferProgress), nameof(TransferText), nameof(TransferVisibility), nameof(FileSizeText), nameof(IsDownloadCompleted), nameof(IsDownloadingActive), nameof(CanBeDownloaded), nameof(DisplayText), nameof(BubbleMaxWidth), nameof(VoiceVisibility) })
             PropertyChanged?.Invoke(this, new(name));
     }
 

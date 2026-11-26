@@ -77,6 +77,14 @@ public partial class MainWindow
             case "updateMessageEdited":
                 _ = RefreshMessageAsync(chatId, update.Field("message_id").Number());
                 break;
+            case "updateMessageInteractionInfo":
+            case "updateMessageReactions":
+                ApplyMessageInteractionUpdate(update);
+                break;
+            case "updateMessageIsPinned":
+                if (histories.TryGetValue(chatId, out var pinnedHistory) && pinnedHistory.Messages.TryGetValue(update.Field("message_id").Number(), out var pinnedRow))
+                    pinnedRow.SetPinned(update.Field("is_pinned").Flag());
+                break;
             case "updateDeleteMessages":
                 DeleteCachedMessages(update);
                 break;
@@ -323,6 +331,9 @@ public partial class MainWindow
         var reply = new MenuFlyoutItem { Text = "Ответить", DataContext = row };
         var edit = new MenuFlyoutItem { Text = "Изменить", DataContext = row };
         var favorite = new MenuFlyoutItem { Text = "В избранное", DataContext = row };
+        var pin = new MenuFlyoutItem { Text = row.IsPinned ? "Открепить" : "Закрепить", DataContext = row };
+        var reactions = new MenuFlyoutItem { Text = "Добавить реакцию", DataContext = row };
+        var reactionAuthors = new MenuFlyoutItem { Text = "Кто отреагировал", DataContext = row };
         var delete = new MenuFlyoutItem { Text = "Удалить", DataContext = row };
         reply.Click += ContextReply;
         edit.Click += ContextEdit;
@@ -332,10 +343,16 @@ public partial class MainWindow
         forward.Click += ContextForward;
         select.Click += ContextSelect;
         favorite.Click += SaveMessageToFavorites;
+        pin.Click += TogglePinnedMessage;
+        reactions.Click += ShowReactionPicker;
+        reactionAuthors.Click += ShowReactionAuthors;
         if (properties.Field("can_be_replied").Flag()) menu.Items.Add(reply);
         if (row.Text.Length > 0) menu.Items.Add(copy);
         if (properties.Field("can_be_forwarded").Flag()) menu.Items.Add(forward);
         if (properties.Field("can_be_edited").Flag()) menu.Items.Add(edit);
+        menu.Items.Add(reactions);
+        if (row.Reactions.Count > 0) menu.Items.Add(reactionAuthors);
+        if (properties.Field("can_be_pinned").Flag()) menu.Items.Add(pin);
         if (savedChatId != 0 && row.ChatId != savedChatId && properties.Field("can_be_forwarded").Flag()) menu.Items.Add(favorite);
         if (properties.Field("can_get_link").Flag()) menu.Items.Add(copyLink);
         if (row.MediaKind.Length > 0)
@@ -359,6 +376,18 @@ public partial class MainWindow
         if (properties.Field("can_be_deleted_only_for_self").Flag() || properties.Field("can_be_deleted_for_all_users").Flag()) menu.Items.Add(delete);
         menu.ShowAt(target);
         args.Handled = true;
+    }
+
+    private async void TogglePinnedMessage(object sender, RoutedEventArgs args)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not MessageRow row || telegram is null) return;
+        try
+        {
+            await telegram.RequestAsync(row.IsPinned
+                ? new { @type = "unpinChatMessage", chat_id = row.ChatId, message_id = row.Id }
+                : new { @type = "pinChatMessage", chat_id = row.ChatId, message_id = row.Id, disable_notification = true, only_for_self = false }, lifetime.Token);
+        }
+        catch (Exception ex) when (ex is TdException or OperationCanceledException) { MessengerStatus.Text = "Не удалось изменить закрепление. " + ex.Message; }
     }
 
     private async void SaveMessageToFavorites(object sender, RoutedEventArgs args)

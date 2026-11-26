@@ -338,6 +338,41 @@ public partial class MainWindow
         catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException) { }
     }
 
+    private async Task ConfigureWebmPlayerAsync(WebView2 player, string path, Func<bool> isCurrent, Func<bool> isVisible, Action ready)
+    {
+        var bytes = await File.ReadAllBytesAsync(path, lifetime.Token);
+        if (!isCurrent()) return;
+        await player.EnsureCoreWebView2Async();
+        if (!isCurrent()) return;
+        var core = player.CoreWebView2;
+        core.Settings.AreDefaultContextMenusEnabled = false;
+        core.Settings.AreDevToolsEnabled = false;
+        core.WebMessageReceived += (sender, args) =>
+        {
+            if (!isCurrent() || args.TryGetWebMessageAsString() != "ready") return;
+            ready();
+            _ = SetWebmPlayingAsync(player, isVisible());
+        };
+        player.NavigateToString($$"""
+            <!doctype html><html><head><meta charset="utf-8">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; media-src data:; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+            <style>html,body,video{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}video{object-fit:contain}</style>
+            </head><body><video id="sticker" muted loop playsinline preload="auto" src="data:video/webm;base64,{{Convert.ToBase64String(bytes)}}"></video>
+            <script>const v=document.getElementById('sticker');v.addEventListener('canplay',()=>chrome.webview.postMessage('ready'),{once:true});</script>
+            </body></html>
+            """);
+    }
+
+    private static async Task SetWebmPlayingAsync(WebView2 player, bool playing)
+    {
+        try
+        {
+            if (player.CoreWebView2 is { } core)
+                await core.ExecuteScriptAsync(playing ? "document.getElementById('sticker')?.play()" : "document.getElementById('sticker')?.pause()");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException) { }
+    }
+
     private static async Task<string> ExpandTgsAsync(int fileId, string sourcePath, CancellationToken token)
     {
         Directory.CreateDirectory(MediaCacheRoot);
@@ -372,7 +407,11 @@ public partial class MainWindow
         {
             if (playback.Visible == visible) return;
             playback.Visible = visible;
-            if (playback.Player is WebView2 lottie) _ = SetTgsPlayingAsync(lottie, visible);
+            if (playback.Player is WebView2 web)
+            {
+                if (playback.Format == "stickerFormatTgs") _ = SetTgsPlayingAsync(web, visible);
+                else _ = SetWebmPlayingAsync(web, visible);
+            }
             else if (playback.Player is MediaPlayerElement { MediaPlayer: { } video })
             {
                 if (visible && playback.MediaOpened) video.Play();
@@ -432,7 +471,7 @@ public partial class MainWindow
             _ => (0, "")
         };
         if (fileId == 0 || format is not ("stickerFormatTgs" or "stickerFormatWebm")) return;
-        var playback = new StickerPlayback();
+        var playback = new StickerPlayback { Format = format };
         stickerPlayback.Add(host, playback);
         bool IsCurrent() => host.IsLoaded && ReferenceEquals(host.DataContext, context) &&
             stickerPlayback.TryGetValue(host, out var current) && ReferenceEquals(current, playback);
@@ -454,27 +493,14 @@ public partial class MainWindow
             }
             else
             {
-                var file = await StorageFile.GetFileFromPathAsync(path);
-                if (!IsCurrent()) return;
-                var element = new MediaPlayerElement { Stretch = Stretch.Uniform, IsHitTestVisible = false };
-                var player = new MediaPlayer { IsMuted = true, IsLoopingEnabled = true };
-                host.Children.Add(element);
-                playback.Player = element;
-                element.SetMediaPlayer(player);
-                player.MediaOpened += (_, _) => DispatcherQueue.TryEnqueue(() =>
+                var player = CreateTgsPlayer();
+                host.Children.Add(player);
+                playback.Player = player;
+                await ConfigureWebmPlayerAsync(player, path, IsCurrent, () => playback.Visible, () =>
                 {
-                    if (!IsCurrent()) return;
                     playback.MediaOpened = true;
                     if (host.Children[0] is Image preview) preview.Visibility = Visibility.Collapsed;
-                    if (playback.Visible) player.Play();
                 });
-                player.MediaFailed += (_, _) => DispatcherQueue.TryEnqueue(() =>
-                {
-                    if (!IsCurrent()) return;
-                    element.Visibility = Visibility.Collapsed;
-                    if (host.Children[0] is Image preview) preview.Visibility = Visibility.Visible;
-                });
-                player.Source = MediaSource.CreateFromStorageFile(file);
             }
         }
         catch (Exception ex) when (ex is TdException or OperationCanceledException or IOException or
@@ -490,6 +516,7 @@ public partial class MainWindow
         public bool Visible { get; set; } = true;
         public bool MediaOpened { get; set; }
         public FrameworkElement? Player { get; set; }
+        public string Format { get; init; } = "";
     }
 
     private async void OpenMessageLink(object sender, RoutedEventArgs args)

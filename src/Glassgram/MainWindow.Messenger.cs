@@ -232,6 +232,8 @@ public partial class MainWindow
     private async Task OpenChatAsync(long chatId)
     {
         if (!messengerStarted || telegram is null) return;
+        if (voiceRecording && activeChat?.Id != chatId) await FinishVoiceRecordingAsync(false);
+        activeVoice?.Stop();
         var version = ++chatOpenVersion;
         try
         {

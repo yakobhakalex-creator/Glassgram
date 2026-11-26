@@ -159,15 +159,21 @@
                             </StackPanel>
                             <Button Content="Скачать / открыть" Click="DownloadOrOpenDocument"/>
                           </StackPanel>
+                          <ContentControl Visibility="{Binding VoiceVisibility}" Loaded="VoiceControlLoaded" Unloaded="VoiceControlUnloaded" DataContextChanged="VoiceControlContextChanged" HorizontalContentAlignment="Stretch"/>
                           <StackPanel Visibility="{Binding TransferVisibility}" Spacing="2">
                             <ProgressBar Value="{Binding TransferProgress}" Maximum="100"/>
                             <TextBlock Text="{Binding TransferText}" FontSize="11" Opacity="0.7"/>
                           </StackPanel>
                         </StackPanel>
                         <TextBlock FontFamily="{StaticResource ChatTextFont}" Text="{Binding DisplayText}" TextWrapping="Wrap" IsTextSelectionEnabled="True" FontSize="15"/>
+                        <ItemsControl ItemsSource="{Binding Reactions}" Visibility="{Binding ReactionsVisibility}" HorizontalAlignment="Left">
+                          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate><DataTemplate><Button Click="ReactionClicked" Padding="7,2" MinWidth="34"><StackPanel Orientation="Horizontal" Spacing="3"><TextBlock Text="{Binding Label}" FontFamily="{StaticResource ChatEmojiFont}"/><TextBlock Text="{Binding CountText}"/></StackPanel></Button></DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
                         <HyperlinkButton Content="{Binding PrimaryLink}" Tag="{Binding PrimaryLink}" Visibility="{Binding LinkVisibility}" Click="OpenMessageLink" Padding="0" HorizontalAlignment="Left"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="5">
                           <TextBlock Text="{Binding TimeText}" FontSize="10" Opacity="0.65"/>
+                          <FontIcon Glyph="&#xE840;" FontSize="10" Visibility="{Binding PinnedVisibility}"/>
                           <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#8ED7FA"/>
                         </StackPanel>
                       </StackPanel>
@@ -192,7 +198,7 @@
               <Grid x:Name="ComposerPanel" Grid.Row="3" Padding="8,6" Margin="6,4,6,6" CornerRadius="20" RowSpacing="5" ColumnSpacing="7" BorderBrush="Transparent" BorderThickness="0" HorizontalAlignment="Stretch">
                 <Grid.Background><AcrylicBrush TintColor="#36566F" TintOpacity="0.76" TintLuminosityOpacity="0.34" FallbackColor="#F0223342"/></Grid.Background>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel x:Name="ComposeContext" Visibility="Collapsed" Orientation="Horizontal" Spacing="10" Grid.ColumnSpan="4">
                   <TextBlock x:Name="ComposeContextText" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                   <Button Content="Отмена" Click="CancelMessageAction"/>
@@ -201,7 +207,9 @@
                 <Button x:Name="StickerButton" Grid.Row="1" Grid.Column="1" Width="36" Height="36" Padding="0" Click="OpenStickerPanel" VerticalAlignment="Bottom" ToolTipService.ToolTip="Эмодзи и стикеры"><FontIcon Glyph="&#xE11D;" FontFamily="Segoe Fluent Icons" FontSize="17"/></Button>
                 <TextBox FontFamily="{StaticResource ChatTextFont}" x:Name="MessageInput" Grid.Row="1" Grid.Column="2" PlaceholderText="Сообщение" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="36" MaxHeight="104" Padding="10,5" VerticalContentAlignment="Center" ScrollViewer.HorizontalScrollMode="Disabled" TextChanged="MessageInputChanged" PreviewKeyDown="MessageInputPreviewKeyDown"/>
                 <Button x:Name="SendMessageButton" Grid.Row="1" Grid.Column="3" Width="38" Height="38" CornerRadius="19" Click="SendTelegramMessage" VerticalAlignment="Bottom" ToolTipService.ToolTip="Отправить"><FontIcon Glyph="&#xE724;" FontSize="16"/></Button>
-                <TextBlock x:Name="MessengerStatus" Grid.Row="2" Grid.ColumnSpan="4" FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
+                <Button x:Name="VoiceRecordButton" Grid.Row="1" Grid.Column="4" Width="38" Height="38" CornerRadius="19" Click="ToggleVoiceRecording" VerticalAlignment="Bottom" ToolTipService.ToolTip="Голосовое сообщение"><FontIcon x:Name="VoiceRecordIcon" Glyph="&#xE720;" FontSize="16"/></Button>
+                <StackPanel x:Name="VoiceRecordingPanel" Grid.Row="2" Grid.ColumnSpan="5" Orientation="Horizontal" Spacing="10" Visibility="Collapsed"><TextBlock x:Name="VoiceRecordTime" VerticalAlignment="Center"/><Button Content="Отменить" Click="CancelVoiceRecording"/><TextBlock Text="Нажмите микрофон ещё раз, чтобы отправить" VerticalAlignment="Center" Opacity="0.65"/></StackPanel>
+                <TextBlock x:Name="MessengerStatus" Grid.Row="2" Grid.ColumnSpan="5" FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
               </Grid>
             </Grid>
             <controls:GlassPanel x:Name="FutureSidePanel" Grid.Column="1" Visibility="Collapsed" MinWidth="280" MaxWidth="340" Margin="6,0,0,0" Padding="12" BorderThickness="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">

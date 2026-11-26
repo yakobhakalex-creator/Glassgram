@@ -12,7 +12,7 @@
     <SelfContained>true</SelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\Glassgram.ico</ApplicationIcon>
-    <Version>0.6.1</Version>
+    <Version>0.6.2</Version>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -23,6 +23,9 @@
     <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="11.0.0" />
     <PackageReference Include="CommunityToolkit.WinUI.Lottie" Version="8.2.250604" />
+    <PackageReference Include="Concentus" Version="2.2.2" />
+    <PackageReference Include="Concentus.Oggfile" Version="1.0.7" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.241114003" ExcludeAssets="build;buildTransitive;runtime;native;contentfiles;analyzers" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
