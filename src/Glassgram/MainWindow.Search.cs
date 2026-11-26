@@ -11,12 +11,18 @@ public partial class MainWindow
 {
     private readonly GlobalSearchState searchState = new();
     private readonly DispatcherTimer searchDebounce = new() { Interval = TimeSpan.FromMilliseconds(GlobalSearchService.DebounceMs) };
+    private readonly List<RecentSearchResult> recentSearches = [];
     private bool searchActive;
 
     private void InitializeSearch()
     {
         SearchResultsList.ItemsSource = searchState.Results;
         searchDebounce.Tick += async (_, _) => await PerformSearchAsync(searchState.Query, searchState.Generation);
+    }
+
+    private void SearchFocus(object sender, RoutedEventArgs args)
+    {
+        if (ChatSearch.Text.Trim().Length == 0) ShowRecentSearches();
     }
 
     private void SearchChats(object sender, TextChangedEventArgs args)
@@ -33,6 +39,7 @@ public partial class MainWindow
         {
             ClearSearchResults();
             RefreshChatList();
+            if (box.FocusState != FocusState.Unfocused) ShowRecentSearches();
             return;
         }
         if (queryChanged)
@@ -70,6 +77,71 @@ public partial class MainWindow
         SearchUI.Visibility = Visibility.Collapsed;
         ChatList.Visibility = Visibility.Visible;
         ChatList.ItemsSource = visibleChats;
+        RecentSearchHeader.Visibility = Visibility.Collapsed;
+    }
+
+    private void ShowRecentSearches()
+    {
+        if (recentSearches.Count == 0 || ChatSearch.Text.Trim().Length != 0) return;
+        searchActive = true;
+        SearchUI.Visibility = Visibility.Visible;
+        ChatList.Visibility = Visibility.Collapsed;
+        SearchProgressRing.IsActive = false;
+        SearchLoadingText.Visibility = Visibility.Collapsed;
+        EmptySearchResults.Visibility = Visibility.Collapsed;
+        SearchErrorText.Visibility = Visibility.Collapsed;
+        RecentSearchHeader.Visibility = Visibility.Visible;
+        searchState.Results.Clear();
+        foreach (var recent in recentSearches) searchState.Results.Add(recent);
+        LoadMoreSearchMessages.Visibility = Visibility.Collapsed;
+    }
+
+    private async Task LoadRecentSearchesAsync(long accountId, CancellationToken token)
+    {
+        var entries = await RecentSearchStore.LoadAsync(accountId, token);
+        recentSearches.Clear();
+        foreach (var entry in entries.Take(20))
+        {
+            var recent = new RecentSearchResult
+            {
+                ChatId = entry.ChatId, Title = entry.Title, Username = entry.Username, Type = entry.Type,
+                PhotoFileId = entry.PhotoFileId, AvatarPath = entry.AvatarPath
+            };
+            recent.LoadAvatar();
+            recentSearches.Add(recent);
+        }
+    }
+
+    private async Task AddRecentSearchAsync(long chatId, string title, string username, string type, int photoFileId, string avatarPath)
+    {
+        if (savedChatId == 0 || chatId == 0 || title.Length == 0) return;
+        recentSearches.RemoveAll(item => item.ChatId == chatId);
+        var recent = new RecentSearchResult
+        {
+            ChatId = chatId, Title = title, Username = username, Type = type,
+            PhotoFileId = photoFileId, AvatarPath = avatarPath
+        };
+        recent.LoadAvatar();
+        recentSearches.Insert(0, recent);
+        if (recentSearches.Count > 20) recentSearches.RemoveRange(20, recentSearches.Count - 20);
+        await RecentSearchStore.SaveAsync(savedChatId, recentSearches.Select(item => item.ToEntry()), lifetime.Token);
+    }
+
+    private async void RemoveRecentSearch(object sender, RoutedEventArgs args)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not RecentSearchResult recent) return;
+        recentSearches.RemoveAll(item => item.ChatId == recent.ChatId);
+        searchState.Results.Remove(recent);
+        await RecentSearchStore.SaveAsync(savedChatId, recentSearches.Select(item => item.ToEntry()), lifetime.Token);
+        if (recentSearches.Count == 0) ClearSearchResults();
+    }
+
+    private async void ClearRecentSearches(object sender, RoutedEventArgs args)
+    {
+        recentSearches.Clear();
+        searchState.Results.Clear();
+        await RecentSearchStore.SaveAsync(savedChatId, [], lifetime.Token);
+        ClearSearchResults();
     }
 
     private void UpdateSearchUI()
@@ -85,6 +157,7 @@ public partial class MainWindow
         }
 
         SearchUI.Visibility = Visibility.Visible;
+        RecentSearchHeader.Visibility = Visibility.Collapsed;
         var allEmpty = searchState.Chats.Count == 0 && searchState.Contacts.Count == 0 &&
                        searchState.Messages.Count == 0 && searchState.PublicChats.Count == 0;
 
@@ -128,6 +201,7 @@ public partial class MainWindow
         SearchContactResult contact => $"contact:{contact.UserId}",
         SearchPublicChatResult chat => $"public:{chat.ChatId}",
         SearchMessageResult message => $"message:{message.ChatId}:{message.MessageId}",
+        RecentSearchResult recent => $"recent:{recent.ChatId}",
         _ => item.GetHashCode().ToString()
     };
 
@@ -230,7 +304,15 @@ public partial class MainWindow
         foreach (var fileId in fileIds)
         {
             if (token.IsCancellationRequested) break;
-            try { await telegram!.RequestAsync(new { @type = "downloadFile", file_id = fileId, priority = 1, offset = 0, limit = 0, synchronous = false }, token); }
+            try
+            {
+                var file = await telegram!.RequestAsync(new { @type = "downloadFile", file_id = fileId, priority = 1, offset = 0, limit = 0, synchronous = true }, token);
+                var path = file.Field("local").Field("path").Text();
+                if (path.Length == 0) continue;
+                foreach (var chat in searchState.Chats.Where(item => item.PhotoFileId == fileId)) chat.SetAvatar(path);
+                foreach (var contact in searchState.Contacts.Where(item => item.PhotoFileId == fileId)) contact.SetAvatar(path);
+                foreach (var chat in searchState.PublicChats.Where(item => item.PhotoFileId == fileId)) chat.SetAvatar(path);
+            }
             catch (Exception ex) when (ex is TdException or OperationCanceledException) { }
         }
     }
@@ -280,6 +362,7 @@ public partial class MainWindow
         {
             case SearchChatResult chat:
                 await OpenChatAsync(chat.ChatId);
+                await AddRecentSearchAsync(chat.ChatId, chat.Title, chat.Username, chat.Type, chat.PhotoFileId, chat.AvatarPath);
                 ClearSearchResults();
                 ChatSearch.Text = "";
                 break;
@@ -290,6 +373,7 @@ public partial class MainWindow
                     {
                         var chat = await telegram!.RequestAsync(new { @type = "createPrivateChat", user_id = contact.UserId, force = false }, lifetime.Token);
                         await OpenChatAsync(chat.Field("id").Number());
+                        await AddRecentSearchAsync(chat.Field("id").Number(), contact.DisplayName, contact.Username, "Контакт", contact.PhotoFileId, contact.AvatarPath);
                         ClearSearchResults();
                         ChatSearch.Text = "";
                     }
@@ -301,12 +385,21 @@ public partial class MainWindow
                 break;
             case SearchPublicChatResult publicChat:
                 await OpenChatAsync(publicChat.ChatId);
+                await AddRecentSearchAsync(publicChat.ChatId, publicChat.Title, publicChat.Username, publicChat.Type, publicChat.PhotoFileId, publicChat.AvatarPath);
                 ClearSearchResults();
                 ChatSearch.Text = "";
                 break;
             case SearchMessageResult message:
                 await OpenChatAsync(message.ChatId);
+                if (knownChats.TryGetValue(message.ChatId, out var messageChat))
+                    await AddRecentSearchAsync(message.ChatId, messageChat.Title, "", "Чат", messageChat.PhotoFileId, "");
                 await NavigateToMessageAsync(message.ChatId, message.MessageId);
+                ClearSearchResults();
+                ChatSearch.Text = "";
+                break;
+            case RecentSearchResult recent:
+                await OpenChatAsync(recent.ChatId);
+                await AddRecentSearchAsync(recent.ChatId, recent.Title, recent.Username, recent.Type, recent.PhotoFileId, recent.AvatarPath);
                 ClearSearchResults();
                 ChatSearch.Text = "";
                 break;

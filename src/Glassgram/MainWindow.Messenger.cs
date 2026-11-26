@@ -102,6 +102,7 @@ public partial class MainWindow
         {
             var me = await client.RequestAsync(new { @type = "getMe" }, lifetime.Token);
             savedChatId = me.Field("id").Number();
+            await LoadRecentSearchesAsync(savedChatId, lifetime.Token);
             try
             {
                 var saved = await client.RequestAsync(new { @type = "createPrivateChat", user_id = savedChatId, force = false }, lifetime.Token);

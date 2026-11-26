@@ -15,6 +15,7 @@ internal sealed class SearchChatResult : INotifyPropertyChanged
     public string Type { get; set; } = "";
     public string AvatarLetter => Title.Length > 0 ? Title[..1].ToUpperInvariant() : "•";
     public ImageSource? Avatar { get; set; }
+    public string AvatarPath { get; private set; } = "";
     public int PhotoFileId { get; set; }
     public bool IsVerified { get; set; }
     public bool IsScam { get; set; }
@@ -25,7 +26,7 @@ internal sealed class SearchChatResult : INotifyPropertyChanged
     public void SetAvatar(string path)
     {
         if (path.Length == 0 || !File.Exists(path)) return;
-        try { Avatar = new BitmapImage(new Uri(path)); Raise(nameof(Avatar)); }
+        try { AvatarPath = path; Avatar = new BitmapImage(new Uri(path)); Raise(nameof(Avatar)); }
         catch (UriFormatException) { }
     }
 }
@@ -66,6 +67,7 @@ internal sealed class SearchContactResult : INotifyPropertyChanged
     public string Type => "Контакт";
     public string AvatarLetter => DisplayName.Length > 0 ? DisplayName[..1].ToUpperInvariant() : "•";
     public ImageSource? Avatar { get; set; }
+    public string AvatarPath { get; private set; } = "";
     public int PhotoFileId { get; set; }
     public bool IsVerified { get; set; }
 
@@ -74,7 +76,7 @@ internal sealed class SearchContactResult : INotifyPropertyChanged
     public void SetAvatar(string path)
     {
         if (path.Length == 0 || !File.Exists(path)) return;
-        try { Avatar = new BitmapImage(new Uri(path)); Raise(nameof(Avatar)); }
+        try { AvatarPath = path; Avatar = new BitmapImage(new Uri(path)); Raise(nameof(Avatar)); }
         catch (UriFormatException) { }
     }
 }
@@ -90,6 +92,7 @@ internal sealed class SearchPublicChatResult : INotifyPropertyChanged
     public int MembersCount { get; set; }
     public string AvatarLetter => Title.Length > 0 ? Title[..1].ToUpperInvariant() : "•";
     public ImageSource? Avatar { get; set; }
+    public string AvatarPath { get; private set; } = "";
     public int PhotoFileId { get; set; }
     public bool IsVerified { get; set; }
     public bool IsScam { get; set; }
@@ -100,9 +103,37 @@ internal sealed class SearchPublicChatResult : INotifyPropertyChanged
     public void SetAvatar(string path)
     {
         if (path.Length == 0 || !File.Exists(path)) return;
-        try { Avatar = new BitmapImage(new Uri(path)); Raise(nameof(Avatar)); }
+        try { AvatarPath = path; Avatar = new BitmapImage(new Uri(path)); Raise(nameof(Avatar)); }
         catch (UriFormatException) { }
     }
+}
+
+internal sealed class RecentSearchResult
+{
+    public long ChatId { get; init; }
+    public string Title { get; init; } = "";
+    public string Username { get; init; } = "";
+    public string Type { get; init; } = "";
+    public int PhotoFileId { get; init; }
+    public string AvatarPath { get; init; } = "";
+    public ImageSource? Avatar { get; private set; }
+    public string AvatarLetter => Title.Length > 0 ? Title[..1].ToUpperInvariant() : "•";
+    public string SectionTitle => "";
+    public string Preview => "";
+    public string ChatTitle => "";
+    public string TimeText => "";
+    public bool IsVerified => false;
+    public bool IsScam => false;
+    public bool CanRemove => true;
+
+    public void LoadAvatar()
+    {
+        if (AvatarPath.Length == 0 || !File.Exists(AvatarPath)) return;
+        try { Avatar = new BitmapImage(new Uri(AvatarPath)); }
+        catch (UriFormatException) { }
+    }
+
+    public RecentSearchEntry ToEntry() => new(ChatId, Title, Username, Type, PhotoFileId, AvatarPath);
 }
 
 internal enum SearchCategory
