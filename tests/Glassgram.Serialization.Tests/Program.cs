@@ -140,6 +140,30 @@ if (staleGen == generation) throw new Exception("Generation check logic failed")
 if (searchMessages.GetProperty("offset").GetString() != "next-page-token") throw new Exception("searchMessages offset mismatch");
 if (searchMessages.TryGetProperty("from_message_id", out _)) throw new Exception("searchMessages must not contain from_message_id");
 
+// Per-chat search uses a numeric cursor returned as next_from_message_id.
+var chatSearch = Parse(new
+{
+    @type = "searchChatMessages", chat_id = 42L, topic_id = (object?)null, query = "needle",
+    sender_id = new Dictionary<string, object?> { ["@type"] = "messageSenderUser", ["user_id"] = 5L },
+    from_message_id = 777L, offset = 0, limit = 50,
+    filter = new Dictionary<string, string> { ["@type"] = "searchMessagesFilterPhoto" }
+});
+Equal("searchChatMessages", chatSearch, "$chatSearch");
+Equal("messageSenderUser", chatSearch.GetProperty("sender_id"), "$chatSearch.sender_id");
+Equal("searchMessagesFilterPhoto", chatSearch.GetProperty("filter"), "$chatSearch.filter");
+if (chatSearch.GetProperty("from_message_id").GetInt64() != 777 || chatSearch.GetProperty("offset").GetInt32() != 0)
+    throw new Exception("searchChatMessages cursor regression");
+if (chatSearch.TryGetProperty("next_offset", out _)) throw new Exception("searchChatMessages must not use global next_offset");
+
+var pinnedSearch = Parse(new { @type = "searchChatMessages", chat_id = 42L, topic_id = (object?)null, query = "", sender_id = (object?)null, from_message_id = 0L, offset = 0, limit = 50, filter = new { @type = "searchMessagesFilterPinned" } });
+Equal("searchMessagesFilterPinned", pinnedSearch.GetProperty("filter"), "$pinnedSearch.filter");
+Equal("getChatPinnedMessage", Parse(new { @type = "getChatPinnedMessage", chat_id = 42L }), "$getPinned");
+
+var chatSearchGeneration = 12;
+var issuedGeneration = chatSearchGeneration;
+chatSearchGeneration++;
+if (issuedGeneration == chatSearchGeneration) throw new Exception("Per-chat stale response guard regression");
+
 // Chat folders: root and nested TDLib types.
 var folderObject = new Dictionary<string, object?>
 {
