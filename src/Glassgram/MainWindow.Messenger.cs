@@ -178,6 +178,7 @@ public partial class MainWindow
 
     private void RefreshChatList()
     {
+        if (searchActive) return; // Don't refresh normal list during search
         var selected = activeChat?.Id;
         var query = ChatSearch.Text.Trim();
         var rows = knownChats.Values
@@ -213,8 +214,7 @@ public partial class MainWindow
         }
     }
 
-    private void SearchChats(object sender, TextChangedEventArgs args) => RefreshChatList();
-
+    
     private async void SelectChat(object sender, SelectionChangedEventArgs args)
     {
         if (ChatList.SelectedItem is ChatRow chat && chat.Id != activeChat?.Id)

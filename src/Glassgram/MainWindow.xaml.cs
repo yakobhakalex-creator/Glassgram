@@ -71,6 +71,7 @@ public partial class MainWindow : Window
         Closed += async (_, _) => { wallpaperTimer.Stop(); if (voiceRecording) await FinishVoiceRecordingAsync(false); activeVoice?.Dispose(); SaveCurrentDraft(); lifetime.Cancel(); http.Dispose(); };
         InitializeMedia();
         InitializeTelegram();
+        InitializeSearch();
     }
 
     private void Navigate(NavigationView sender, NavigationViewSelectionChangedEventArgs args)

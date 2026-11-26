@@ -21,7 +21,14 @@ public partial class MainWindow
     {
         var ctrl = IsPressed(VirtualKey.Control);
         var alt = IsPressed(VirtualKey.Menu);
-        if (e.Key == VirtualKey.Escape) { CancelCurrentAction(); e.Handled = true; return; }
+        if (e.Key == VirtualKey.Escape)
+        {
+            HandleSearchEscape(sender, e);
+            if (e.Handled) return;
+            CancelCurrentAction();
+            e.Handled = true;
+            return;
+        }
         if (IsTextEditor(e.OriginalSource) && !(ctrl && (e.Key is VirtualKey.F or VirtualKey.K or VirtualKey.Tab || e.Key == CommaKey))) return;
         if (ctrl && e.Key == VirtualKey.F) { ShowMessageSearch(); e.Handled = true; }
         else if (ctrl && e.Key == VirtualKey.K) { Navigation.SelectedItem = Navigation.MenuItems[0]; ChatSearch.Focus(FocusState.Programmatic); ChatSearch.SelectAll(); e.Handled = true; }

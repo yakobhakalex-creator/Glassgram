@@ -222,7 +222,8 @@ internal sealed partial class MessageRow : INotifyPropertyChanged
     public string DayText => Date.ToString("d MMMM yyyy");
     public string Status { get; private set; } = "";
     public Brush BubbleBrush { get; private set; } = new SolidColorBrush(Windows.UI.Color.FromArgb(190, 48, 65, 82));
-    public Brush BubbleBorderBrush { get; private set; } = new SolidColorBrush(Windows.UI.Color.FromArgb(50, 255, 255, 255));
+    public Brush BubbleBorderBrush { get; set; } = new SolidColorBrush(Windows.UI.Color.FromArgb(50, 255, 255, 255));
+    public void NotifyPropertyChanged(string propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public static MessageRow FromJson(JsonElement message)

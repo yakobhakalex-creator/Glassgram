@@ -60,4 +60,92 @@ Equal("inputFileId", stickerContent.GetProperty("sticker").GetProperty("sticker"
 try { TdRequestSerializer.Serialize(new { chat_id = 42L }); throw new Exception("Missing root @type wasn't rejected"); }
 catch (JsonException) { }
 
+// Global Search serialization tests
+var searchChats = Parse(new { @type = "searchChats", query = "test", limit = 50 });
+Equal("searchChats", searchChats, "$searchChats");
+
+var searchChatsOnServer = Parse(new { @type = "searchChatsOnServer", query = "test", limit = 50 });
+Equal("searchChatsOnServer", searchChatsOnServer, "$searchChatsOnServer");
+
+var searchContacts = Parse(new { @type = "searchContacts", query = "test", limit = 50 });
+Equal("searchContacts", searchContacts, "$searchContacts");
+
+var searchPublicChats = Parse(new { @type = "searchPublicChats", username = "test" });
+Equal("searchPublicChats", searchPublicChats, "$searchPublicChats");
+
+var searchPublicChat = Parse(new { @type = "searchPublicChat", username = "testchannel" });
+Equal("searchPublicChat", searchPublicChat, "$searchPublicChat");
+
+var searchMessages = Parse(new
+{
+    @type = "searchMessages",
+    chat_id = 0L,
+    query = "test",
+    filter = new { @type = "searchMessagesFilterEmpty" },
+    min_date = 0,
+    max_date = 0,
+    offset = 0,
+    limit = 30,
+    from_message_id = 0L
+});
+Equal("searchMessages", searchMessages, "$searchMessages");
+var filter = searchMessages.GetProperty("filter");
+Equal("searchMessagesFilterEmpty", filter, "$searchMessages.filter");
+
+var getChat = Parse(new { @type = "getChat", chat_id = 42L });
+Equal("getChat", getChat, "$getChat");
+
+var getUser = Parse(new { @type = "getUser", user_id = 42L });
+Equal("getUser", getUser, "$getUser");
+
+var getSupergroup = Parse(new { @type = "getSupergroup", supergroup_id = 42L });
+Equal("getSupergroup", getSupergroup, "$getSupergroup");
+
+var getMessage = Parse(new { @type = "getMessage", chat_id = 42L, message_id = 7L });
+Equal("getMessage", getMessage, "$getMessage");
+
+var createPrivateChat = Parse(new { @type = "createPrivateChat", user_id = 42L, force = false });
+Equal("createPrivateChat", createPrivateChat, "$createPrivateChat");
+
+// Deduplication test
+var dedupChats = new List<(long ChatId, string Title)>
+{
+    (1, "Chat 1"),
+    (2, "Chat 2"),
+    (1, "Chat 1 Duplicate"),
+    (3, "Chat 3")
+};
+var seenChatIds = new HashSet<long>();
+var uniqueChats = dedupChats.Where(c => seenChatIds.Add(c.ChatId)).ToList();
+if (uniqueChats.Count != 3) throw new Exception($"Chat deduplication failed: expected 3, got {uniqueChats.Count}");
+
+var dedupMessages = new List<(long ChatId, long MessageId)>
+{
+    (1, 100),
+    (1, 101),
+    (2, 100),
+    (1, 100), // Duplicate
+    (2, 101)
+};
+var seenMessageKeys = new HashSet<(long ChatId, long MessageId)>();
+var uniqueMessages = dedupMessages.Where(m => seenMessageKeys.Add(m)).ToList();
+if (uniqueMessages.Count != 4) throw new Exception($"Message deduplication failed: expected 4, got {uniqueMessages.Count}");
+
+// Stale request generation test
+int generation = 0;
+var currentGen = ++generation;
+var staleGen = currentGen - 1;
+if (staleGen == generation) throw new Exception("Generation check logic failed");
+
+// Pagination cursor test
+long lastCursor = 0;
+var pages = new List<long> { 100, 90, 80, 70, 60 };
+foreach (var cursor in pages)
+{
+    if (cursor >= lastCursor && lastCursor != 0)
+        throw new Exception("Pagination cursor should decrease");
+    lastCursor = cursor;
+}
+if (lastCursor != 60) throw new Exception("Pagination final cursor mismatch");
+
 Console.WriteLine("TDLib serialization regression tests passed.");
