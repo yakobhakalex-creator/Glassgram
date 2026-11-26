@@ -22,7 +22,7 @@
         <TextBlock Text="Glassgram" FontSize="16" FontWeight="SemiBold"/>
       </StackPanel>
     </Grid>
-    <NavigationView x:Name="Navigation" Grid.Row="1" PaneDisplayMode="Auto" IsPaneOpen="True" OpenPaneLength="245" CompactPaneLength="48" CompactModeThresholdWidth="850" ExpandedModeThresholdWidth="1080" IsBackButtonVisible="Collapsed" IsPaneToggleButtonVisible="True" SelectionChanged="Navigate">
+    <NavigationView x:Name="Navigation" Grid.Row="1" PaneDisplayMode="LeftCompact" IsPaneOpen="True" OpenPaneLength="220" CompactPaneLength="76" IsBackButtonVisible="Collapsed" IsPaneToggleButtonVisible="True" SelectionChanged="Navigate" PaneOpened="NavigationPaneOpened" PaneClosed="NavigationPaneClosed">
       <NavigationView.PaneHeader>
         <Border x:Name="BrandPanel" Margin="8,8,8,14" Padding="14" CornerRadius="24" BorderBrush="#65FFFFFF" BorderThickness="1" Background="#2AFFFFFF">
           <StackPanel Orientation="Horizontal" Spacing="12"><Border Width="44" Height="44" CornerRadius="22" Background="#3BFFFFFF"><FontIcon Glyph="&#xE8F2;" FontSize="22" Foreground="#D9F5FF"/></Border><StackPanel VerticalAlignment="Center"><TextBlock Text="Glassgram" FontSize="21" FontWeight="SemiBold"/><TextBlock Text="Telegram + локальный ИИ" FontSize="11" Opacity="0.72"/></StackPanel></StackPanel>
@@ -30,12 +30,37 @@
       </NavigationView.PaneHeader>
       <NavigationView.MenuItems>
         <NavigationViewItem Content="Сообщения" Tag="chats" Icon="Message" IsSelected="True"/>
-        <NavigationViewItem Content="ИИ-агенты" Tag="agent" Icon="Contact"/>
-        <NavigationViewItem Content="Локальный ИИ" Tag="ai" Icon="Help"/>
-        <NavigationViewItem Content="Суммаризация" Tag="summarize"><NavigationViewItem.Icon><FontIcon Glyph="&#xE8A5;"/></NavigationViewItem.Icon></NavigationViewItem>
-        <NavigationViewItem Content="Черновик ответа" Tag="draft"><NavigationViewItem.Icon><FontIcon Glyph="&#xE70F;"/></NavigationViewItem.Icon></NavigationViewItem>
-        <NavigationViewItem Content="Перевод" Tag="translate"><NavigationViewItem.Icon><FontIcon Glyph="&#xF2B7;"/></NavigationViewItem.Icon></NavigationViewItem>
+        <NavigationViewItem Content="ИИ" Icon="Contact" SelectsOnInvoked="False">
+          <NavigationViewItem.MenuItems>
+            <NavigationViewItem Content="ИИ-агенты" Tag="agent" Icon="Contact"/>
+            <NavigationViewItem Content="Локальный ИИ" Tag="ai" Icon="Help"/>
+            <NavigationViewItem Content="Суммаризация" Tag="summarize"><NavigationViewItem.Icon><FontIcon Glyph="&#xE8A5;"/></NavigationViewItem.Icon></NavigationViewItem>
+            <NavigationViewItem Content="Черновик ответа" Tag="draft"><NavigationViewItem.Icon><FontIcon Glyph="&#xE70F;"/></NavigationViewItem.Icon></NavigationViewItem>
+            <NavigationViewItem Content="Перевод" Tag="translate"><NavigationViewItem.Icon><FontIcon Glyph="&#xF2B7;"/></NavigationViewItem.Icon></NavigationViewItem>
+          </NavigationViewItem.MenuItems>
+        </NavigationViewItem>
       </NavigationView.MenuItems>
+      <NavigationView.PaneCustomContent>
+        <Grid Margin="6,8,6,6" RowSpacing="6">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <TextBlock Text="ПАПКИ" FontSize="10" FontWeight="SemiBold" Opacity="0.55" Margin="10,0,0,2"/>
+          <ListView x:Name="FolderList" Grid.Row="1" SelectionMode="Single" SelectionChanged="SelectFolder" Background="Transparent" ScrollViewer.VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Stretch">
+            <ListView.ItemContainerStyle>
+              <Style TargetType="ListViewItem"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0,2"/><Setter Property="MinHeight" Value="54"/></Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate><DataTemplate><StackPanel MinHeight="58" Padding="4,3" Spacing="2" ToolTipService.ToolTip="{Binding Title}">
+              <Grid Width="32" Height="32" HorizontalAlignment="Center">
+                <Border CornerRadius="12" Background="#24FFFFFF" BorderBrush="#38FFFFFF" BorderThickness="1"/>
+                <FontIcon Glyph="{Binding Icon}" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <Border Visibility="{Binding UnreadVisibility}" Background="#5CA9D4" CornerRadius="9" Padding="4,0" HorizontalAlignment="Right" VerticalAlignment="Top"><TextBlock Text="{Binding UnreadText}" FontSize="9" Foreground="White"/></Border>
+              </Grid>
+              <TextBlock Text="{Binding Title}" FontSize="9" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" TextAlignment="Center" HorizontalAlignment="Stretch"/>
+            </StackPanel></DataTemplate></ListView.ItemTemplate>
+          </ListView>
+          <Button Grid.Row="2" Click="ShowArchiveChats" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="6,5"><StackPanel Spacing="2"><FontIcon Glyph="&#xE8B7;" HorizontalAlignment="Center"/><TextBlock Text="Архив" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Button>
+          <Button x:Name="FolderManagementButton" Grid.Row="3" Click="OpenFolderSettings" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="6,5"><StackPanel Spacing="2"><FontIcon Glyph="&#xE713;" HorizontalAlignment="Center"/><TextBlock Text="Папки" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Button>
+        </Grid>
+      </NavigationView.PaneCustomContent>
       <Grid Margin="10,0,18,18">
         <Grid x:Name="AuthPage" Visibility="Collapsed">
           <Border MaxWidth="620" HorizontalAlignment="Center" VerticalAlignment="Center" Background="{ThemeResource GlassPanelBrush}" BorderBrush="#48FFFFFF" BorderThickness="1" CornerRadius="24" Padding="36">
@@ -83,23 +108,10 @@
         <Grid x:Name="ChatsPage" ColumnSpacing="0">
           <Grid.ColumnDefinitions><ColumnDefinition x:Name="ChatColumn" Width="340" MinWidth="250"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
           <controls:GlassPanel x:Name="ChatListPanel" CornerRadius="28" BorderBrush="Transparent" BorderThickness="0" Padding="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
-            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Border x:Name="FolderRail" Visibility="Collapsed" Width="62" Margin="5" Padding="3,8" CornerRadius="22" Background="#24101924">
-              <Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <ListView x:Name="FolderList" SelectionMode="Single" SelectionChanged="SelectFolder" Background="Transparent" ScrollViewer.VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Stretch">
-                  <ListView.ItemTemplate><DataTemplate><Grid Width="48" MinHeight="54" ToolTipService.ToolTip="{Binding Title}">
-                    <FontIcon Glyph="{Binding Icon}" FontSize="21" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    <Border Visibility="{Binding UnreadVisibility}" Background="#5CA9D4" CornerRadius="9" Padding="4,0" HorizontalAlignment="Right" VerticalAlignment="Top"><TextBlock Text="{Binding UnreadText}" FontSize="9" Foreground="White"/></Border>
-                  </Grid></DataTemplate></ListView.ItemTemplate>
-                </ListView>
-                <Button x:Name="FolderManagementButton" Grid.Row="1" Content="&#xE713;" FontFamily="Segoe Fluent Icons" Width="44" Height="44" Padding="0" Click="OpenFolderSettings" ToolTipService.ToolTip="Управление папками"/>
-              </Grid>
-            </Border>
-            <Grid Grid.Column="1" Margin="10" RowSpacing="8"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+            <Grid Margin="10" RowSpacing="8"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
               <TextBlock Text="Чаты" FontSize="25" FontWeight="SemiBold" Margin="10,5,8,0"/>
               <TextBox x:Name="ChatSearch" Grid.Row="1" PlaceholderText="Поиск в Glassgram" TextChanged="SearchChats" GotFocus="SearchFocus"/>
-              <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="7" Margin="2,0"><Button Content="Все чаты" Click="ShowMainChats"/><Button Content="Архив" Click="ShowArchiveChats"/></StackPanel>
-              <Grid x:Name="SearchUI" Grid.Row="3" RowSpacing="8">
+              <Grid x:Name="SearchUI" Grid.Row="2" RowSpacing="8">
                 <Grid.RowDefinitions>
                   <RowDefinition Height="Auto"/>
                   <RowDefinition Height="Auto"/>
@@ -167,7 +179,7 @@
                   </Grid>
                 </DataTemplate></ListView.ItemTemplate>
               </ListView>
-            </Grid></Grid>
+            </Grid>
           </controls:GlassPanel>
           <Grid Grid.Column="1" Background="Transparent" PointerPressed="ResizeChatPressed" PointerMoved="ResizeChatMoved" PointerReleased="ResizeChatReleased" PointerCaptureLost="ResizeChatCaptureLost" ToolTipService.ToolTip="Изменить ширину списка чатов"><Border Width="1" Background="#28FFFFFF" HorizontalAlignment="Center" Margin="0,22"/></Grid>
           <controls:GlassPanel x:Name="MessagesPanel" Grid.Column="2" CornerRadius="28" BorderBrush="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">

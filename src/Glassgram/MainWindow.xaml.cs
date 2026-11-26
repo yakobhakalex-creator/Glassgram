@@ -72,6 +72,7 @@ public partial class MainWindow : Window
             ApplyTheme();
             ApplyGlassSettings();
             ApplyInterfaceScale();
+            Navigation.IsPaneOpen = preferences.NavigationPaneOpen;
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -110,6 +111,18 @@ public partial class MainWindow : Window
     }
 
     private void OpenAi(object sender, RoutedEventArgs args) => Navigation.SelectedItem = Navigation.MenuItems.OfType<NavigationViewItem>().First(item => item.Tag?.ToString() == "ai");
+
+    private void NavigationPaneOpened(NavigationView sender, object args)
+    {
+        preferences.NavigationPaneOpen = true;
+        SavePreferences();
+    }
+
+    private void NavigationPaneClosed(NavigationView sender, object args)
+    {
+        preferences.NavigationPaneOpen = false;
+        SavePreferences();
+    }
 
     private void ShowMainChats(object sender, RoutedEventArgs args) { showingArchive = false; activeFolderId = 0; preferences.ActiveChatFolderId = 0; SavePreferences(); if (chatFolders.Count > 0) FolderList.SelectedItem = chatFolders[0]; RefreshChatList(); }
     private void ShowArchiveChats(object sender, RoutedEventArgs args) { showingArchive = true; RefreshChatList(); }
@@ -500,4 +513,5 @@ public sealed class Preferences
     public int InterfaceScale { get; set; } = 100;
     public int ActiveChatFolderId { get; set; }
     public HashSet<long> HiddenPinnedBars { get; set; } = [];
+    public bool NavigationPaneOpen { get; set; } = true;
 }

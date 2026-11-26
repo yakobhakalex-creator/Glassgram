@@ -78,8 +78,7 @@ public partial class MainWindow
 
     private void RefreshFolderRail()
     {
-        FolderRail.Visibility = chatFolders.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
-        FolderManagementButton.Visibility = chatFolders.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        FolderManagementButton.Visibility = Visibility.Visible;
     }
 
     private async void SelectFolder(object sender, SelectionChangedEventArgs args)
