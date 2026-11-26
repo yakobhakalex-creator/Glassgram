@@ -1,4 +1,5 @@
 <Solution>
   <Configurations><Platform Name="x64" /></Configurations>
   <Project Path="src/Glassgram/Glassgram.csproj" />
+  <Project Path="tests/Glassgram.Serialization.Tests/Glassgram.Serialization.Tests.csproj" />
 </Solution>

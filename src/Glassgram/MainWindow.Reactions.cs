@@ -13,9 +13,20 @@ public partial class MainWindow
         var chatId = update.Field("chat_id").Number();
         var messageId = update.Field("message_id").Number();
         if (!histories.TryGetValue(chatId, out var history) || !history.Messages.TryGetValue(messageId, out var row)) return;
-        var source = update.Field("interaction_info").Field("reactions");
-        if (source.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
-            source = JsonSerializer.SerializeToElement(new Dictionary<string, object?> { ["reactions"] = update.Field("reactions") });
+        if (update.Field("@type").Text() == "updateMessageInteractionInfo")
+        {
+            // interaction_info is nullable. A null value means that reactions were removed.
+            row.ApplyReactionInfo(update.Field("interaction_info").Field("reactions"));
+            return;
+        }
+
+        var reactionItems = update.Field("reactions");
+        if (reactionItems.ValueKind != JsonValueKind.Array)
+        {
+            row.ApplyReactionInfo(default);
+            return;
+        }
+        var source = JsonSerializer.SerializeToElement(new Dictionary<string, JsonElement> { ["reactions"] = reactionItems.Clone() });
         row.ApplyReactionInfo(source);
     }
 

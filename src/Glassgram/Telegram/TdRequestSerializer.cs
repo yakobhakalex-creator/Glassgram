@@ -14,6 +14,8 @@ internal static class TdRequestSerializer
         var source = JsonSerializer.SerializeToElement(request);
         if (source.ValueKind != JsonValueKind.Object)
             throw new JsonException("TDLib request must be a JSON object.");
+        if (extra.HasValue && source.TryGetProperty("@extra", out _))
+            throw new JsonException("TDLib request already contains @extra.");
 
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))

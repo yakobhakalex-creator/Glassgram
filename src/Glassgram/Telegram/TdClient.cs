@@ -33,7 +33,9 @@ internal sealed class TdClient : IDisposable
             linked.CancelAfter(TimeSpan.FromSeconds(45));
             Send(request, id);
             var result = await completion.Task.WaitAsync(linked.Token);
-            if (result.GetProperty("@type").GetString() == "error")
+            if (!result.TryGetProperty("@type", out var resultType) || resultType.ValueKind != JsonValueKind.String)
+                throw new JsonException("TDLib response is missing @type: " + result.GetRawText());
+            if (resultType.GetString() == "error")
                 throw new TdException((int)result.Field("code").Number(), result.GetProperty("message").GetString() ?? "Ошибка TDLib");
             return result;
         }
