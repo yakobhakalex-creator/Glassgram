@@ -22,6 +22,20 @@ internal static class ChatMemberPolicy
     internal static bool IsCurrent(int issuedGeneration, int currentGeneration, long issuedChatId, long currentChatId) =>
         issuedGeneration == currentGeneration && issuedChatId == currentChatId;
 
+    internal static GroupAdminCapabilities GetGroupCapabilities(JsonElement currentStatus)
+    {
+        var type = Text(currentStatus, "@type");
+        var creator = type == "chatMemberStatusCreator";
+        var rights = Field(currentStatus, "rights");
+        var member = type is "chatMemberStatusCreator" or "chatMemberStatusAdministrator" or "chatMemberStatusMember" or "chatMemberStatusRestricted";
+        return new(
+            creator || Flag(rights, "can_change_info"),
+            creator || Flag(rights, "can_restrict_members"),
+            creator || Flag(rights, "can_invite_users"),
+            creator,
+            member);
+    }
+
     private static JsonElement Field(JsonElement value, string name) =>
         value.ValueKind == JsonValueKind.Object && value.TryGetProperty(name, out var field) ? field : default;
 
@@ -35,3 +49,10 @@ internal readonly record struct MemberCapabilities(
     bool CanRestrict,
     bool IsAdministrator,
     bool IsBanned);
+
+internal readonly record struct GroupAdminCapabilities(
+    bool CanChangeInfo,
+    bool CanRestrictMembers,
+    bool CanInvite,
+    bool IsOwner,
+    bool IsMember);

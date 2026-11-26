@@ -111,6 +111,11 @@ public partial class MainWindow
             case "updateChatMember":
                 RefreshProfileMembers(update);
                 break;
+            case "updateNewChatJoinRequest":
+            case "updateChatPendingJoinRequests":
+            case "updateChatHasProtectedContent":
+                RefreshGroupAdministration(update);
+                break;
             case "updateChatAction":
                 UpdateChatAction(update);
                 break;

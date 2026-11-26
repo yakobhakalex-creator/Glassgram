@@ -341,6 +341,45 @@
                         <Grid ColumnSpacing="6"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Button x:Name="ProfileMembersMoreButton" Content="Показать ещё" Click="LoadMoreProfileMembers" Visibility="Collapsed" HorizontalAlignment="Stretch"/><Button x:Name="ProfileInviteMemberButton" Grid.Column="1" Content="Пригласить" Click="InviteMemberClick" Visibility="Collapsed" HorizontalAlignment="Stretch"/></Grid>
                       </StackPanel>
                     </Border>
+                    <Border x:Name="GroupAdministrationSection" Visibility="Collapsed" Background="#24FFFFFF" BorderBrush="#45FFFFFF" BorderThickness="1" CornerRadius="14" Padding="8">
+                      <StackPanel Spacing="8">
+                        <TextBlock Text="Управление группой" FontWeight="SemiBold" FontSize="16"/>
+                        <StackPanel Spacing="6">
+                          <Button x:Name="GroupEditInfoButton" Content="Название и описание" Click="EditGroupInfoClick" HorizontalAlignment="Stretch"/>
+                          <Button x:Name="GroupPhotoButton" Content="Аватар" Click="ChangeGroupPhotoClick" HorizontalAlignment="Stretch"/>
+                          <Button x:Name="GroupUsernameButton" Content="Тип и username" Click="EditGroupUsernameClick" HorizontalAlignment="Stretch"/>
+                          <Button x:Name="GroupPermissionsButton" Content="Разрешения" Click="EditGroupPermissionsClick" HorizontalAlignment="Stretch"/>
+                          <Button x:Name="GroupSlowModeButton" Content="Медленный режим" Click="EditSlowModeClick" HorizontalAlignment="Stretch"/>
+                          <Button x:Name="GroupProtectedButton" Content="Защита контента" Click="ToggleProtectedContentClick" HorizontalAlignment="Stretch"/>
+                          <Button x:Name="GroupReactionsButton" Content="Реакции" Click="EditGroupReactionsClick" HorizontalAlignment="Stretch"/>
+                          <Button x:Name="GroupJoinButton" Content="Вступить" Click="JoinGroupClick" HorizontalAlignment="Stretch" Visibility="Collapsed"/>
+                          <Button x:Name="GroupLeaveButton" Content="Покинуть" Click="LeaveGroupClick" HorizontalAlignment="Stretch" Visibility="Collapsed"/>
+                        </StackPanel>
+                        <TextBlock x:Name="GroupAdministrationStatus" Opacity="0.72" TextWrapping="Wrap"/>
+                      </StackPanel>
+                    </Border>
+                    <Border x:Name="GroupInviteLinksSection" Visibility="Collapsed" Background="#24FFFFFF" BorderBrush="#45FFFFFF" BorderThickness="1" CornerRadius="14" Padding="8">
+                      <StackPanel Spacing="8">
+                        <Grid><TextBlock Text="Пригласительные ссылки" FontWeight="SemiBold" FontSize="16"/><Button Content="Создать" Click="CreateInviteLinkClick" HorizontalAlignment="Right"/></Grid>
+                        <ListView x:Name="ProfileInviteLinks" Height="180" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OpenInviteLink">
+                          <ListView.ItemsPanel><ItemsPanelTemplate><ItemsStackPanel Orientation="Vertical"/></ItemsPanelTemplate></ListView.ItemsPanel>
+                          <ListView.ItemTemplate><DataTemplate><StackPanel Height="58" Padding="4" VerticalAlignment="Center"><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Summary}" FontSize="11" Opacity="0.72"/></StackPanel></DataTemplate></ListView.ItemTemplate>
+                        </ListView>
+                        <TextBlock x:Name="InviteLinksStatus" Opacity="0.72" TextWrapping="Wrap"/>
+                        <Button x:Name="InviteLinksMoreButton" Content="Показать ещё" Click="LoadMoreInviteLinks" Visibility="Collapsed" HorizontalAlignment="Stretch"/>
+                      </StackPanel>
+                    </Border>
+                    <Border x:Name="GroupJoinRequestsSection" Visibility="Collapsed" Background="#24FFFFFF" BorderBrush="#45FFFFFF" BorderThickness="1" CornerRadius="14" Padding="8">
+                      <StackPanel Spacing="8">
+                        <TextBlock Text="Заявки на вступление" FontWeight="SemiBold" FontSize="16"/>
+                        <ListView x:Name="ProfileJoinRequests" Height="180" SelectionMode="None">
+                          <ListView.ItemsPanel><ItemsPanelTemplate><ItemsStackPanel Orientation="Vertical"/></ItemsPanelTemplate></ListView.ItemsPanel>
+                          <ListView.ItemTemplate><DataTemplate><Grid Height="62" Padding="4" ContextRequested="JoinRequestContextRequested"><StackPanel><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Username}" FontSize="11" Opacity="0.72"/><TextBlock Text="{Binding Bio}" FontSize="11" Opacity="0.62" TextTrimming="CharacterEllipsis"/></StackPanel></Grid></DataTemplate></ListView.ItemTemplate>
+                        </ListView>
+                        <TextBlock x:Name="JoinRequestsStatus" Opacity="0.72" TextWrapping="Wrap"/>
+                        <Button x:Name="JoinRequestsMoreButton" Content="Показать ещё" Click="LoadMoreJoinRequests" Visibility="Collapsed" HorizontalAlignment="Stretch"/>
+                      </StackPanel>
+                    </Border>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12"><StackPanel><TextBlock x:Name="ProfileMediaCount" FontSize="18" FontWeight="SemiBold" TextAlignment="Center"/><TextBlock Text="Медиа" FontSize="11"/></StackPanel><StackPanel><TextBlock x:Name="ProfileFileCount" FontSize="18" FontWeight="SemiBold" TextAlignment="Center"/><TextBlock Text="Файлы" FontSize="11"/></StackPanel><StackPanel><TextBlock x:Name="ProfileLinkCount" FontSize="18" FontWeight="SemiBold" TextAlignment="Center"/><TextBlock Text="Ссылки" FontSize="11"/></StackPanel></StackPanel>
                     <ComboBox x:Name="ProfileSharedCategory" SelectionChanged="ProfileSharedCategoryChanged" HorizontalAlignment="Stretch"><ComboBoxItem Content="Общие медиа" Tag="searchMessagesFilterPhotoAndVideo" IsSelected="True"/><ComboBoxItem Content="Общие файлы" Tag="searchMessagesFilterDocument"/><ComboBoxItem Content="Общие ссылки" Tag="searchMessagesFilterUrl"/></ComboBox>
                     <GridView x:Name="ProfileSharedGrid" MaxHeight="360" IsItemClickEnabled="True" ItemClick="OpenSharedMedia" SelectionMode="None"><GridView.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid ItemWidth="126" ItemHeight="112"/></ItemsPanelTemplate></GridView.ItemsPanel><GridView.ItemTemplate><DataTemplate><Grid Width="118" Height="104"><Image Source="{Binding Message.MediaPreview}" Stretch="UniformToFill" Loaded="SharedThumbnailLoaded"/><Border VerticalAlignment="Bottom" Background="#A0182028" Padding="5"><TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" FontSize="11"/></Border></Grid></DataTemplate></GridView.ItemTemplate></GridView>

@@ -61,6 +61,7 @@ public partial class MainWindow
         ProfileUsername.Text = "";
         ProfileDescription.Text = "";
         ProfileMembersSection.Visibility = Visibility.Collapsed;
+        GroupAdministrationSection.Visibility = Visibility.Collapsed;
         ProfileMemberSearch.Text = "";
         memberQuery = "";
         memberCategory = "members";
@@ -93,6 +94,7 @@ public partial class MainWindow
                 ProfileDescription.Text = full.Field("description").Text();
                 ProfileKind.Text = "Группа";
                 await PrepareMembersAsync(chat, full);
+                await PrepareGroupAdministrationAsync(chat, full);
             }
             else if (chat.SupergroupId != 0)
             {
@@ -104,6 +106,7 @@ public partial class MainWindow
                 ProfileDescription.Text = full.Field("description").Text();
                 ProfileKind.Text = group.Field("is_channel").Flag() ? "Канал" : "Супергруппа";
                 await PrepareMembersAsync(chat, full);
+                await PrepareGroupAdministrationAsync(chat, full);
             }
             var counts = await Task.WhenAll(
                 GetSharedCountAsync(chat.Id, "searchMessagesFilterPhotoAndVideo"),

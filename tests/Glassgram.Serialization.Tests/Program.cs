@@ -239,4 +239,38 @@ var adminCapabilities = ChatMemberPolicy.GetCapabilities(Parse(adminStatus), Par
 if (!adminCapabilities.CanPromote || !adminCapabilities.CanRestrict || !adminCapabilities.CanInvite) throw new Exception("Administrator capability regression");
 if (ChatMemberPolicy.IsCurrent(4, 5, 42, 42) || ChatMemberPolicy.IsCurrent(5, 5, 42, 41)) throw new Exception("Member stale-response guard regression");
 
+// Group settings, invite links, and join requests.
+Equal("setChatTitle", Parse(new { @type = "setChatTitle", chat_id = 42L, title = "Group" }), "$setChatTitle");
+Equal("setChatDescription", Parse(new { @type = "setChatDescription", chat_id = 42L, description = "About" }), "$setChatDescription");
+var setPhoto = Parse(new { @type = "setChatPhoto", chat_id = 42L, photo = new { @type = "inputChatPhotoStatic", photo = new { @type = "inputFileLocal", path = "C:\\Temp\\group.png" } } });
+Equal("inputChatPhotoStatic", setPhoto.GetProperty("photo"), "$setPhoto.photo");
+Equal("inputFileLocal", setPhoto.GetProperty("photo").GetProperty("photo"), "$setPhoto.photo.photo");
+var setPermissions = Parse(new { @type = "setChatPermissions", chat_id = 42L, permissions });
+Equal("chatPermissions", setPermissions.GetProperty("permissions"), "$setPermissions.permissions");
+Equal("setChatSlowModeDelay", Parse(new { @type = "setChatSlowModeDelay", chat_id = 42L, slow_mode_delay = 30 }), "$slowMode");
+var reactions = Parse(new { @type = "setChatAvailableReactions", chat_id = 42L, available_reactions = new { @type = "chatAvailableReactionsSome", reactions = Array.Empty<object>(), max_reaction_count = 1 } });
+Equal("chatAvailableReactionsSome", reactions.GetProperty("available_reactions"), "$reactions.available_reactions");
+Equal("toggleChatHasProtectedContent", Parse(new { @type = "toggleChatHasProtectedContent", chat_id = 42L, has_protected_content = true }), "$protected");
+Equal("joinChat", Parse(new { @type = "joinChat", chat_id = 42L }), "$join");
+Equal("leaveChat", Parse(new { @type = "leaveChat", chat_id = 42L }), "$leave");
+
+var invitePage = Parse(new { @type = "getChatInviteLinks", chat_id = 42L, creator_user_id = 77L, is_revoked = false, offset_date = 123, offset_invite_link = "https://t.me/+next", limit = 50 });
+if (invitePage.GetProperty("offset_date").GetInt32() != 123 || invitePage.GetProperty("offset_invite_link").GetString() != "https://t.me/+next") throw new Exception("Invite link pagination regression");
+Equal("getChatInviteLink", Parse(new { @type = "getChatInviteLink", chat_id = 42L, invite_link = "https://t.me/+one" }), "$getInvite");
+Equal("createChatInviteLink", Parse(new { @type = "createChatInviteLink", chat_id = 42L, name = "Test", expiration_date = 0, member_limit = 10, creates_join_request = false }), "$createInvite");
+Equal("editChatInviteLink", Parse(new { @type = "editChatInviteLink", chat_id = 42L, invite_link = "https://t.me/+one", name = "Test", expiration_date = 0, member_limit = 0, creates_join_request = true }), "$editInvite");
+Equal("revokeChatInviteLink", Parse(new { @type = "revokeChatInviteLink", chat_id = 42L, invite_link = "https://t.me/+one" }), "$revokeInvite");
+Equal("getChatInviteLinkMembers", Parse(new { @type = "getChatInviteLinkMembers", chat_id = 42L, invite_link = "https://t.me/+one", only_with_expired_subscription = false, offset_member = (object?)null, limit = 50 }), "$inviteMembers");
+var joinRequests = Parse(new { @type = "getChatJoinRequests", chat_id = 42L, invite_link = "", query = "", offset_request = new { @type = "chatJoinRequest", user_id = 77L, date = 123, bio = "" }, limit = 50 });
+Equal("chatJoinRequest", joinRequests.GetProperty("offset_request"), "$joinRequests.offset_request");
+Equal("processChatJoinRequest", Parse(new { @type = "processChatJoinRequest", chat_id = 42L, user_id = 77L, approve = true }), "$processRequest");
+
+var ownerGroupCapabilities = ChatMemberPolicy.GetGroupCapabilities(Parse(new { @type = "chatMemberStatusCreator" }));
+if (!ownerGroupCapabilities.CanChangeInfo || !ownerGroupCapabilities.CanRestrictMembers || !ownerGroupCapabilities.CanInvite || !ownerGroupCapabilities.IsOwner) throw new Exception("Owner group rights regression");
+var memberGroupCapabilities = ChatMemberPolicy.GetGroupCapabilities(Parse(new { @type = "chatMemberStatusMember", member_until_date = 0 }));
+if (memberGroupCapabilities.CanChangeInfo || memberGroupCapabilities.CanInvite || memberGroupCapabilities.IsOwner || !memberGroupCapabilities.IsMember) throw new Exception("Member group rights regression");
+
+var serverError = JsonDocument.Parse("{\"@type\":\"error\",\"code\":400,\"message\":\"CHAT_ADMIN_REQUIRED\"}").RootElement;
+if (serverError.GetProperty("code").GetInt32() != 400 || serverError.GetProperty("message").GetString() != "CHAT_ADMIN_REQUIRED") throw new Exception("TDLib server error propagation regression");
+
 Console.WriteLine("TDLib serialization regression tests passed.");
