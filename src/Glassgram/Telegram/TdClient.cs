@@ -42,13 +42,8 @@ internal sealed class TdClient : IDisposable
 
     private void Send(object request, long? id = null)
     {
-        var json = JsonSerializer.Serialize(request);
-        using var doc = JsonDocument.Parse(json);
-        var values = new Dictionary<string, JsonElement>();
-        foreach (var property in doc.RootElement.EnumerateObject())
-            values[property.Name == "type" ? "@type" : property.Name] = property.Value.Clone();
-        if (id.HasValue) values["@extra"] = JsonSerializer.SerializeToElement(id.Value);
-        var bytes = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(values) + "\0");
+        var json = TdRequestSerializer.Serialize(request, id);
+        var bytes = System.Text.Encoding.UTF8.GetBytes(json + "\0");
         Native.td_json_client_send(client, bytes);
     }
 
